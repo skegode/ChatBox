@@ -44,7 +44,7 @@ export default function HeroSection() {
         <div className="container">
           <div className="row align-items-center justify-content-center">
             <div className="col-lg-6">
-              <h1 className="hero-1-title fw-bold text-shadow mb-4">Welcome to <span className='text-primary'>Recruitement & Support</span></h1>
+              <h1 className="hero-1-title fw-bold text-shadow mb-4">Welcome to <span className='text-primary'>Chatbox</span></h1>
               <div className="w-75 mb-5 mb-lg-0">
                 <p className="text-muted mb-1 pb-5 font-size-17">Turn WhatsApp into your company’s customer support hub. All your chats, one dashboard, faster replies.</p>
                 <p>Manage all client conversations from your company’s WhatsApp number in one secure, easy-to-use platform.</p>
