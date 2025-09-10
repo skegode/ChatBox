@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import api from '@/lib/api';
@@ -10,6 +10,7 @@ import { PERMISSIONS } from '../../../../lib/permissions';
 export default function ApprovalFormClient() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const dropdownRef = useRef<HTMLDivElement>(null); // Ref for the dropdown container
 
   const prospectId = searchParams?.get('id') ?? '';
   const [name] = useState(searchParams?.get('name') ?? '');
@@ -30,6 +31,8 @@ export default function ApprovalFormClient() {
   const [merchants, setMerchants] = useState([] as { id: number; businessName?: string; geoLocation?: string }[]);
   const [merchantId, setMerchantId] = useState<number | ''>('');
   const [merchantSearch, setMerchantSearch] = useState('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false); // New state for dropdown visibility
+  const [selectedMerchantName, setSelectedMerchantName] = useState<string>(''); // New state for selected merchant name
 
   const [devicePrice, setDevicePrice] = useState('');
   const [amountFinanced, setAmountFinanced] = useState('');
@@ -55,16 +58,15 @@ export default function ApprovalFormClient() {
       .then((res) => {
         if (!mounted) return;
         if (Array.isArray(res.data)) {
-          setMerchants(
-            res.data.map((m: unknown) => {
-              const it = m as MerchantDto;
-              return {
-                id: it.id,
-                businessName: it.businessName ?? `#${it.id}`,
-                geoLocation: it.geoLocation ?? '',
-              };
-            })
-          );
+          const fetchedMerchants = res.data.map((m: unknown) => {
+            const it = m as MerchantDto;
+            return {
+              id: it.id,
+              businessName: it.businessName ?? `#${it.id}`,
+              geoLocation: it.geoLocation ?? '',
+            };
+          });
+          setMerchants(fetchedMerchants);
         } else {
           setMerchants([]);
         }
@@ -119,6 +121,16 @@ export default function ApprovalFormClient() {
     };
   }, []);
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitError(null);
@@ -171,6 +183,12 @@ export default function ApprovalFormClient() {
     }
   };
 
+  const handleMerchantSelect = (merchant: { id: number; businessName?: string; geoLocation?: string }) => {
+    setMerchantId(merchant.id);
+    setSelectedMerchantName(merchant.businessName ?? `#${merchant.id}`);
+    setIsDropdownOpen(false); // Close dropdown after selection
+  };
+
   // Render merchant options with geoLocation and search
   const renderMerchantOptions = () => {
     let filtered = merchants;
@@ -182,10 +200,17 @@ export default function ApprovalFormClient() {
           (m.geoLocation ?? '').toLowerCase().includes(search)
       );
     }
+    if (filtered.length === 0) {
+      return <div className="p-2 text-muted">No merchants found.</div>;
+    }
     return filtered.map((m) => (
-      <option key={m.id} value={m.id}>
+      <div
+        key={m.id}
+        onClick={() => handleMerchantSelect(m)}
+        className="p-2 cursor-pointer hover-bg-light"
+      >
         {m.businessName ?? `#${m.id}`} {m.geoLocation ? `(${m.geoLocation})` : ''}
-      </option>
+      </div>
     ));
   };
 
@@ -232,23 +257,30 @@ export default function ApprovalFormClient() {
 
           <div className="mb-3">
             <label className="form-label">Merchant who sold the phone</label>
-            {/* Search bar above the dropdown */}
-            <input
-              type="text"
-              value={merchantSearch}
-              onChange={(e) => setMerchantSearch(e.target.value)}
-              placeholder="Search merchant name or location"
-              className="form-control mb-2"
-            />
-            <select
-              value={merchantId}
-              onChange={(e) => setMerchantId(e.target.value ? Number(e.target.value) : '')}
-              className="form-control"
-              required
-            >
-              <option value="">Select merchant</option>
-              {renderMerchantOptions()}
-            </select>
+            {/* Custom dropdown component */}
+            <div className="position-relative" ref={dropdownRef}>
+              <div
+                className="form-control d-flex justify-content-between align-items-center cursor-pointer"
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              >
+                <span>{selectedMerchantName || "Select merchant"}</span>
+                <span>▼</span>
+              </div>
+              {isDropdownOpen && (
+                <div className="position-absolute w-100 bg-white border border-top-0 rounded-bottom" style={{ zIndex: 1000 }}>
+                  <input
+                    type="text"
+                    value={merchantSearch}
+                    onChange={(e) => setMerchantSearch(e.target.value)}
+                    placeholder="Search merchant name or location"
+                    className="form-control mb-1"
+                  />
+                  <div className="merchant-list" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                    {renderMerchantOptions()}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="mb-3">

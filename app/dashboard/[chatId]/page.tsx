@@ -1,16 +1,15 @@
 // Page for specific chat conversation
 // app/dashboard/[chatId]/page.tsx
 
-'use client';
-import { useEffect, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
-import MessageBubble from '../../../components/chat/MessageBubble';
-import MessageInput from '../../../components/chat/MessageInput';
-import Avatar from '../../../components/ui/Avatar';
-import api from '@/lib/api';
-import { useAuth } from '@/components/providers/AuthProvider';
-import { PERMISSIONS } from '@/lib/permissions';
-import axios from 'axios';
+"use client";
+import { useEffect, useState } from "react";
+import { useRouter, useParams } from "next/navigation";
+import MessageBubble from "../../../components/chat/MessageBubble";
+import MessageInput from "../../../components/chat/MessageInput";
+import api from "@/lib/api";
+import { useAuth } from "@/components/providers/AuthProvider";
+import { PERMISSIONS } from "@/lib/permissions";
+import axios from "axios";
 
 // Match your backend MessageViewModel
 type MessageVm = {
@@ -26,10 +25,14 @@ type MessageVm = {
   contextMessageId?: string | null;
 };
 
-type MessageStatus = 'sent' | 'delivered' | 'read';
+type MessageStatus = "sent" | "delivered" | "read";
 
 // Selected quote state type
-type SelectedQuote = { id: string; body: string; messageId?: string | null } | null;
+type SelectedQuote = {
+  id: string;
+  body: string;
+  messageId?: string | null;
+} | null;
 
 // Context menu state type
 type ContextMenu = { x: number; y: number; message: MessageVm } | null;
@@ -53,14 +56,14 @@ const MEDIA_BASE_URL = "https://app.servicesuitecloud.com/WhatsappApi/";
 
 // helper to detect phone-like strings so we can decide saved vs phone
 function digitsOnly(s?: string) {
-  return (s ?? '').replace(/\D/g, '');
+  return (s ?? "").replace(/\D/g, "");
 }
 
 function contactNameLooksLikePhone(candidate?: string, contactId?: string) {
   if (!candidate) return false;
   const a = digitsOnly(candidate);
   if (!a) return false; // contains letters -> real name
-  const b = digitsOnly(contactId ?? '');
+  const b = digitsOnly(contactId ?? "");
   if (!b) return true; // candidate digits but no contactId -> treat as phone
   return a === b || a.endsWith(b) || b.endsWith(a);
 }
@@ -77,7 +80,7 @@ export default function ChatPage() {
   const [quote, setQuote] = useState<SelectedQuote>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenu>(null);
   const [showSaveModal, setShowSaveModal] = useState(false);
-  const [saveName, setSaveName] = useState('');
+  const [saveName, setSaveName] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const router = useRouter();
@@ -86,12 +89,12 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (!isAuthenticated) {
-      router.push('/login');
+      router.push("/login");
       return;
     }
 
     if (!chatId) {
-      setError('Invalid chat id');
+      setError("Invalid chat id");
       setInitialLoading(false);
     } else {
       setError(null);
@@ -116,7 +119,11 @@ export default function ChatPage() {
       }
     }
 
-    items.sort((a, b) => new Date(a.messageDateTime).getTime() - new Date(b.messageDateTime).getTime());
+    items.sort(
+      (a, b) =>
+        new Date(a.messageDateTime).getTime() -
+        new Date(b.messageDateTime).getTime()
+    );
     return items;
   };
 
@@ -130,7 +137,9 @@ export default function ChatPage() {
     setError(null);
 
     try {
-      const response = await api.get(`api/Messages/contact/${encodeURIComponent(chatId)}`);
+      const response = await api.get(
+        `api/Messages/contact/${encodeURIComponent(chatId)}`
+      );
       const data = response.data;
 
       if (Array.isArray(data)) {
@@ -155,15 +164,19 @@ export default function ChatPage() {
         if (showLoading) setMessages([]);
       }
     } catch (err: unknown) {
-      console.error('Error fetching conversation:', err);
+      console.error("Error fetching conversation:", err);
 
       if (axios.isAxiosError(err) && err.response?.status === 403) {
         setError("You don't have permission to view this conversation");
-        setTimeout(() => router.push('/dashboard'), 3000);
+        setTimeout(() => router.push("/dashboard"), 3000);
       } else if (axios.isAxiosError(err)) {
-        setError(err.response?.data?.error || err.response?.data?.message || 'Failed to load conversation');
+        setError(
+          err.response?.data?.error ||
+            err.response?.data?.message ||
+            "Failed to load conversation"
+        );
       } else {
-        setError('Failed to load conversation');
+        setError("Failed to load conversation");
       }
 
       if (showLoading) setMessages([]);
@@ -178,7 +191,8 @@ export default function ChatPage() {
     try {
       const results = await Promise.allSettled(
         messageIds.map((id) =>
-          api.get(`api/Messages/status`, { params: { messageId: id } })
+          api
+            .get(`api/Messages/status`, { params: { messageId: id } })
             .then((r) => ({ id, data: r.data }))
         )
       );
@@ -186,26 +200,26 @@ export default function ChatPage() {
       setStatusMap((prev) => {
         const next = { ...prev };
         for (const res of results) {
-          if (res.status === 'fulfilled') {
+          if (res.status === "fulfilled") {
             const id = res.value.id;
             const payload: StatusPayload = res.value.data;
             if (payload) {
-              if (String(payload.status).toLowerCase() === 'read') {
-                next[id] = 'read';
+              if (String(payload.status).toLowerCase() === "read") {
+                next[id] = "read";
               } else if (payload.delivered) {
-                next[id] = 'delivered';
+                next[id] = "delivered";
               } else {
-                next[id] = 'sent';
+                next[id] = "sent";
               }
             }
           } else {
-            console.warn('Status check failed', res.reason);
+            console.warn("Status check failed", res.reason);
           }
         }
         return next;
       });
     } catch (e) {
-      console.error('Error fetching message statuses', e);
+      console.error("Error fetching message statuses", e);
     }
   };
 
@@ -232,12 +246,12 @@ export default function ChatPage() {
   const handleSendMessage = async (text: string, file?: File | null) => {
     if (!chatId) return false;
     try {
-      const phoneNumber = (chatId || '').replace(/^\+/, '');
+      const phoneNumber = (chatId || "").replace(/^\+/, "");
 
       let messageText = text;
       const payload: SendMessagePayload = {
         ContactId: phoneNumber,
-        MessageText: '',
+        MessageText: "",
       };
 
       if (quote?.messageId) {
@@ -248,21 +262,25 @@ export default function ChatPage() {
       payload.MessageText = messageText;
 
       let mediaMeta: {
-        fileName: string; mediaId: string; mediaType?: string; mediaLocalPath?: string
+        fileName: string;
+        mediaId: string;
+        mediaType?: string;
+        mediaLocalPath?: string;
       } | null = null;
 
       if (file) {
         const fd = new FormData();
-        fd.append('file', file);
-        const mediaResp = await api.post('/api/Messages/media', fd);
+        fd.append("file", file);
+        const mediaResp = await api.post("/api/Messages/media", fd);
         mediaMeta = mediaResp?.data;
         if (!mediaMeta || !mediaMeta.mediaId) {
-          throw new Error('Media upload failed');
+          throw new Error("Media upload failed");
         }
 
         payload.MediaId = mediaMeta.mediaId;
         if (mediaMeta.mediaType) payload.MediaType = mediaMeta.mediaType;
-        if (mediaMeta.mediaLocalPath) payload.MediaLocalPath = mediaMeta.mediaLocalPath;
+        if (mediaMeta.mediaLocalPath)
+          payload.MediaLocalPath = mediaMeta.mediaLocalPath;
         if (mediaMeta.fileName) payload.MediaFileName = mediaMeta.fileName;
       }
 
@@ -273,40 +291,53 @@ export default function ChatPage() {
         contactName: contactInfo?.name || null,
         contactWaId: phoneNumber,
         messageText: messageText,
-        messageType: file ? (mediaMeta?.mediaType ?? 'media') : 'text',
+        messageType: file ? mediaMeta?.mediaType ?? "media" : "text",
         mediaPath: mediaMeta?.mediaLocalPath ?? null,
         messageDateTime: new Date(),
         isIncoming: false,
         contextMessageId: quote?.messageId || null,
       };
-      setMessages(prev => prev ? [...prev, optimisticMessage] : [optimisticMessage]);
+      setMessages((prev) =>
+        prev ? [...prev, optimisticMessage] : [optimisticMessage]
+      );
 
-      const response = await api.post('/api/Messages/send', payload, {
-        headers: { 'Content-Type': 'application/json' }
+      const response = await api.post("/api/Messages/send", payload, {
+        headers: { "Content-Type": "application/json" },
       });
 
       if (response?.status >= 200 && response?.status < 300) {
         setQuote(null);
         await fetchConversation(false);
-        setMessages(prev => prev?.filter(m => m.messageId !== tempId) || null);
+        setMessages(
+          (prev) => prev?.filter((m) => m.messageId !== tempId) || null
+        );
         return true;
       } else {
-        console.error('Send message returned non-success status', response);
-        setMessages(prev => prev?.filter(m => m.messageId !== tempId) || null);
+        console.error("Send message returned non-success status", response);
+        setMessages(
+          (prev) => prev?.filter((m) => m.messageId !== tempId) || null
+        );
         return false;
       }
     } catch (error: unknown) {
-      console.error('Error sending message:', error);
-      setMessages(prev => prev?.filter(m => !String(m.messageId).startsWith('temp-')) || null);
+      console.error("Error sending message:", error);
+      setMessages(
+        (prev) =>
+          prev?.filter((m) => !String(m.messageId).startsWith("temp-")) || null
+      );
       if (axios.isAxiosError(error)) {
         const response = error.response;
         if (response?.status === 403) {
           setError("You don't have permission to send message to this contact");
         } else {
-          setError(response?.data?.error || response?.data?.message || 'Failed to send message');
+          setError(
+            response?.data?.error ||
+              response?.data?.message ||
+              "Failed to send message"
+          );
         }
       } else {
-        setError((error as Error)?.message || 'Failed to send message');
+        setError((error as Error)?.message || "Failed to send message");
       }
       return false;
     }
@@ -315,8 +346,8 @@ export default function ChatPage() {
   useEffect(() => {
     const handleClick = () => setContextMenu(null);
     if (contextMenu) {
-      document.addEventListener('click', handleClick);
-      return () => document.removeEventListener('click', handleClick);
+      document.addEventListener("click", handleClick);
+      return () => document.removeEventListener("click", handleClick);
     }
   }, [contextMenu]);
 
@@ -324,7 +355,7 @@ export default function ChatPage() {
   const openSaveModal = () => {
     setSaveError(null);
     // prefill only when we have an actual saved name (not a phone disguised as name)
-    setSaveName(contactInfo?.name ?? '');
+    setSaveName(contactInfo?.name ?? "");
     setShowSaveModal(true);
   };
 
@@ -336,7 +367,7 @@ export default function ChatPage() {
   const handleSaveContact = async () => {
     if (!chatId) return;
     if (!saveName || saveName.trim().length === 0) {
-      setSaveError('Name is required');
+      setSaveError("Name is required");
       return;
     }
 
@@ -345,9 +376,9 @@ export default function ChatPage() {
     try {
       const payload = {
         ContactId: chatId.trim(),
-        ContactName: saveName.trim()
+        ContactName: saveName.trim(),
       };
-      const resp = await api.post('/api/Messages/contacts/save-name', payload);
+      const resp = await api.post("/api/Messages/contacts/save-name", payload);
       const data = resp?.data;
       // Update local display: prefer returned contactName if available
       const newName = data?.contactName ?? saveName.trim();
@@ -356,11 +387,15 @@ export default function ChatPage() {
       await fetchConversation(false);
       setShowSaveModal(false);
     } catch (err: unknown) {
-      console.error('Error saving contact name', err);
+      console.error("Error saving contact name", err);
       if (axios.isAxiosError(err)) {
-        setSaveError(err.response?.data?.error || err.response?.data?.message || 'Failed to save contact');
+        setSaveError(
+          err.response?.data?.error ||
+            err.response?.data?.message ||
+            "Failed to save contact"
+        );
       } else {
-        setSaveError('Failed to save contact');
+        setSaveError("Failed to save contact");
       }
     } finally {
       setSaving(false);
@@ -368,95 +403,153 @@ export default function ChatPage() {
   };
 
   // Decide header display and whether a saved name exists (not phone-like)
-  const savedNameExists = !!(contactInfo?.name && !contactNameLooksLikePhone(contactInfo.name, chatId));
+  const savedNameExists = !!(
+    contactInfo?.name && !contactNameLooksLikePhone(contactInfo.name, chatId)
+  );
 
   return (
     <div className="d-lg-flex">
-      <div className='w-100 overflow-hidden position-relative'>
-        <div className='p-3 p-lg-4 border-bottom user-chat-topbar'>
-          <div className='row align-items-center'>
+      <div className="w-100 overflow-hidden position-relative">
+        <div className="p-3 p-lg-4 border-bottom user-chat-topbar">
+          <div className="row align-items-center">
             <div className="col-sm-4 col-8">
-                <div className="d-flex align-items-center">
-                  <div className="d-block d-lg-none me-2 ms-0">
-                    <a href="javascript: void(0);" className="user-chat-remove text-muted font-size-16 p-2"><i className="ri-arrow-left-s-line" /></a>
-                  </div>
-                  <div className="me-3 ms-0">
-                    <img src="/images/default-avatar.png" className="rounded-circle avatar-xs" alt="" />
-                  </div>
-                  <div className="flex-grow-1 overflow-hidden">
-                    <h5 className="font-size-16 mb-0 text-truncate">
-                      <a href="#" className="text-reset user-profile-show">{contactInfo?.name?.charAt(0) || chatId?.charAt(0) || ''}</a>
-                      {savedNameExists ? contactInfo!.name : chatId || 'Unknown'}
-                      {isRefreshing && <span className="w-3 h-3 rounded-full bg-blue-500 animate-pulse inline-block" />}
-                    </h5>
-                  </div>
+              <div className="d-flex align-items-center">
+                <div className="d-block d-lg-none me-2 ms-0">
+                  <a
+                    href="javascript: void(0);"
+                    className="user-chat-remove text-muted font-size-16 p-2"
+                  >
+                    <i className="ri-arrow-left-s-line" />
+                  </a>
+                </div>
+                <div className="me-3 ms-0">
+                  <img
+                    src="/images/default-avatar.png"
+                    className="rounded-circle avatar-xs"
+                    alt=""
+                  />
+                </div>
+                <div className="flex-grow-1 overflow-hidden">
+                  <h5 className="font-size-16 mb-0 text-truncate">                    
+                    {savedNameExists ? contactInfo!.name : chatId || "Unknown"}
+                    {isRefreshing && (
+                      <span className="w-3 h-3 rounded-full bg-blue-500 animate-pulse inline-block" />
+                    )}
+                  </h5>
                 </div>
               </div>
-              <div className="col-sm-8 col-4">
-                <ul className="list-inline user-chat-nav text-end mb-0">
-                  {!canViewAllChats && user && (
-                    <li className="list-inline-item d-none d-lg-inline-block me-2 ms-0">
-                      <button type="button" className="btn nav-btn user-profile-show">
-                        <i className="ri-user-2-line" /> Assigned to you as {user.role}
-                      </button>
-                    </li>
-                  )}
-                  {chatId && (
-                    <li className="list-inline-item d-none d-lg-inline-block me-2 ms-0">
-                      <button onClick={openSaveModal} type="button" className="btn nav-btn" data-bs-toggle="modal" data-bs-target="#audiocallModal">
-                        <i className="ri-phone-line" />{savedNameExists ? 'Edit' : 'Save'}
-                      </button>
-                    </li>
-                  )}
-                </ul>
-              </div>
+            </div>
+            <div className="col-sm-8 col-4">
+              <ul className="list-inline user-chat-nav text-end mb-0">
+                {!canViewAllChats && user && (
+                  <li className="list-inline-item d-none d-lg-inline-block me-2 ms-0">
+                    <button
+                      type="button"
+                      className="btn nav-btn user-profile-show"
+                    >
+                      <i className="ri-user-2-line" /> Assigned to you as{" "}
+                      {user.role}
+                    </button>
+                  </li>
+                )}
+                {chatId && (
+                  <li className="list-inline-item d-none d-lg-inline-block me-2 ms-0">
+                    <button
+                      onClick={openSaveModal}
+                      type="button"
+                      className="btn nav-btn"
+                      data-bs-toggle="modal"
+                      data-bs-target="#audiocallModal"
+                    >
+                      <i className="ri-phone-line" />
+                      {savedNameExists ? "Edit" : "Save"}
+                    </button>
+                  </li>
+                )}
+              </ul>
+            </div>
           </div>
         </div>
         <div className="chat-conversation p-3 p-lg-4">
           {initialLoading ? (
-            <div className="flex justify-center items-center h-full">Loading messages...</div>
+            <div className="flex justify-center items-center h-full">
+              Loading messages...
+            </div>
           ) : error && (!messages || messages.length === 0) ? (
             <div className="flex justify-center items-center h-full text-red-500">
               {error}
             </div>
           ) : messages && messages.length > 0 ? (
             <ul className="list-unstyled mb-0">
-              {
-                messages.map((m) => {
+              {messages.map((m) => {
                 const uniqueKey = buildMsgKey(m);
                 const uiStatus: MessageStatus = m.isIncoming
-                  ? 'delivered'
-                  : (m.messageId ? (statusMap[String(m.messageId)] ?? 'sent') : 'sent');
+                  ? "delivered"
+                  : m.messageId
+                  ? statusMap[String(m.messageId)] ?? "sent"
+                  : "sent";
 
-                const rawPath = m.mediaPath ?? '';
-                const fileName = rawPath ? rawPath.replace(/\\/g, '/').split('/').pop() : null;
+                const rawPath = m.mediaPath ?? "";
+                const fileName = rawPath
+                  ? rawPath.replace(/\\/g, "/").split("/").pop()
+                  : null;
 
                 const mediaUrl = fileName
-                  ? `${MEDIA_BASE_URL}api/Messages/media?path=${encodeURIComponent(fileName)}`
+                  ? `${MEDIA_BASE_URL}api/Messages/media?path=${encodeURIComponent(
+                      fileName
+                    )}`
                   : undefined;
 
-                const ext = fileName ? fileName.split('.').pop()?.toLowerCase() : undefined;
-                let inferredType = (m.messageType || '').toLowerCase() || undefined;
-                if (!inferredType || inferredType === 'media') {
-                  if (ext && ['jpg','jpeg','png','gif','webp','bmp','svg'].includes(ext)) inferredType = 'image';
-                  else if (ext && ['mp4','webm','ogg','mov','mkv'].includes(ext)) inferredType = 'video';
-                  else if (ext && ['mp3','wav','m4a','aac','oga'].includes(ext)) inferredType = 'audio';
-                  else if (ext === 'pdf') inferredType = 'pdf';
-                  else if (ext && ['doc','docx','docm','dot','dotx'].includes(ext)) inferredType = 'document';
-                  else if (ext) inferredType = 'document';
+                const ext = fileName
+                  ? fileName.split(".").pop()?.toLowerCase()
+                  : undefined;
+                let inferredType =
+                  (m.messageType || "").toLowerCase() || undefined;
+                if (!inferredType || inferredType === "media") {
+                  if (
+                    ext &&
+                    [
+                      "jpg",
+                      "jpeg",
+                      "png",
+                      "gif",
+                      "webp",
+                      "bmp",
+                      "svg",
+                    ].includes(ext)
+                  )
+                    inferredType = "image";
+                  else if (
+                    ext &&
+                    ["mp4", "webm", "ogg", "mov", "mkv"].includes(ext)
+                  )
+                    inferredType = "video";
+                  else if (
+                    ext &&
+                    ["mp3", "wav", "m4a", "aac", "oga"].includes(ext)
+                  )
+                    inferredType = "audio";
+                  else if (ext === "pdf") inferredType = "pdf";
+                  else if (
+                    ext &&
+                    ["doc", "docx", "docm", "dot", "dotx"].includes(ext)
+                  )
+                    inferredType = "document";
+                  else if (ext) inferredType = "document";
                 }
 
                 const quotedMessage = m.contextMessageId
-                  ? messages.find((mm) =>
-                      (mm.messageId && mm.messageId === m.contextMessageId) ||
-                      String(mm.id) === String(m.contextMessageId)
+                  ? messages.find(
+                      (mm) =>
+                        (mm.messageId && mm.messageId === m.contextMessageId) ||
+                        String(mm.id) === String(m.contextMessageId)
                     )
                   : undefined;
 
                 return (
                   <li
                     key={uniqueKey}
-                    className={m.isIncoming ? '' : 'right'}
+                    className={m.isIncoming ? "" : "right"}
                     // onContextMenu={(e) => {
                     //   e.preventDefault();
                     //   setContextMenu({ x: e.clientX, y: e.clientY, message: m });
@@ -465,50 +558,58 @@ export default function ChatPage() {
                     <MessageBubble
                       message={{
                         id: uniqueKey,
-                        body: m.messageText ?? '',
+                        body: m.messageText ?? "",
                         timestamp: new Date(m.messageDateTime),
                         status: uiStatus,
-                        direction: m.isIncoming ? 'incoming' : 'outgoing',
-                        chatId: chatId || '',
+                        direction: m.isIncoming ? "incoming" : "outgoing",
+                        chatId: chatId || "",
                         mediaPath: mediaUrl ?? undefined,
                         messageType: inferredType,
                       }}
                       quotedText={quotedMessage?.messageText ?? null}
                       onReply={() => {
-                        setQuote({ id: buildMsgKey(m), body: m.messageText ?? '', messageId: m.messageId ?? null });
+                        setQuote({
+                          id: buildMsgKey(m),
+                          body: m.messageText ?? "",
+                          messageId: m.messageId ?? null,
+                        });
                         setContextMenu(null);
                       }}
                     />
                   </li>
                 );
-              })
-              }
+              })}
             </ul>
-        ) : (
-          <div className="flex justify-center items-center h-full text-gray-500">
-            No messages yet. Start a conversation with {savedNameExists ? contactInfo!.name : chatId || 'this contact'}.
-          </div>
-        )}
+          ) : (
+            <div className="flex justify-center items-center h-full text-gray-500">
+              No messages yet. Start a conversation with{" "}
+              {savedNameExists ? contactInfo!.name : chatId || "this contact"}.
+            </div>
+          )}
         </div>
         <div className="chat-input-section p-3 p-lg-4 border-top mb-0">
           {quote && (
             <div className="card quote-card p-2">
-                <div className='d-flex align-items-start mb-1'>
-                  <em className='flex-grow-1'>Replying to</em>
-                  <a href='#' onClick={() => setQuote(null)} className="fw-medium">
-                    <i className="ri-close-fill"></i>
-                  </a>
-                </div>
-                <div className="rounded bg-light p-2">
-                  <p className="mb-0">{quote.body}</p>
-                </div>
+              <div className="d-flex align-items-start mb-1">
+                <em className="flex-grow-1">Replying to</em>
+                <a
+                  href="#"
+                  onClick={() => setQuote(null)}
+                  className="fw-medium"
+                >
+                  <i className="ri-close-fill"></i>
+                </a>
+              </div>
+              <div className="rounded bg-light p-2">
+                <p className="mb-0">{quote.body}</p>
+              </div>
             </div>
           )}
 
           <MessageInput onSend={handleSendMessage} />
         </div>
       </div>
-      
+
       {contextMenu && (
         <div
           className="fixed z-50 bg-white border rounded shadow-lg p-2"
@@ -517,7 +618,11 @@ export default function ChatPage() {
           <button
             onClick={() => {
               const msg = contextMenu.message;
-              setQuote({ id: buildMsgKey(msg), body: msg.messageText ?? '', messageId: msg.messageId ?? null });
+              setQuote({
+                id: buildMsgKey(msg),
+                body: msg.messageText ?? "",
+                messageId: msg.messageId ?? null,
+              });
               setContextMenu(null);
             }}
             className="text-sm hover:bg-gray-100 px-2 py-1 rounded"
@@ -531,7 +636,9 @@ export default function ChatPage() {
       {showSaveModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
           <div className="bg-white rounded shadow-lg w-full max-w-md p-4">
-            <h3 className="font-semibold mb-2">{savedNameExists ? 'Edit contact' : 'Save contact'}</h3>
+            <h3 className="font-semibold mb-2">
+              {savedNameExists ? "Edit contact" : "Save contact"}
+            </h3>
             <p className="text-xs text-gray-500 mb-3">Phone: {chatId}</p>
             <label className="block text-sm mb-1">Name</label>
             <input
@@ -540,7 +647,9 @@ export default function ChatPage() {
               onChange={(e) => setSaveName(e.target.value)}
               placeholder="Full name"
             />
-            {saveError && <div className="text-red-500 text-sm mb-2">{saveError}</div>}
+            {saveError && (
+              <div className="text-red-500 text-sm mb-2">{saveError}</div>
+            )}
             <div className="flex justify-end gap-2">
               <button
                 onClick={closeSaveModal}
@@ -551,10 +660,10 @@ export default function ChatPage() {
               </button>
               <button
                 onClick={handleSaveContact}
-                className="px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
+                className="btn btn-primary"
                 disabled={saving}
               >
-                {saving ? 'Saving...' : 'Save'}
+                {saving ? "Saving..." : "Save"}
               </button>
             </div>
           </div>
