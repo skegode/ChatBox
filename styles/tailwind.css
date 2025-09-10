@@ -1,0 +1,13 @@
+/* Tailwind customizations */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom WhatsApp-like styles */
+.message-sent {
+  @apply bg-green-500 text-white;
+}
+
+.message-received {
+  @apply bg-gray-200 text-black;
+}

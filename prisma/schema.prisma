@@ -1,0 +1,49 @@
+// Prisma schema for database models generator client { provider = "prisma-client-js" }
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["microsoftSqlServer"]
+}
+
+datasource db {
+  provider = "sqlserver"
+  url      = env("DATABASE_URL")
+}
+
+model Agent {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  passwordHash String
+  email        String?
+  role         String   @default("Agent")
+  createdAt    DateTime @default(now())
+  messages     Message[]
+  chats        Chat[]    @relation("AssignedChats")
+}
+
+model Chat {
+  id                Int       @id @default(autoincrement())
+  whatsAppUserId    String
+  whatsAppUserName  String?
+  assignedAgentId   Int?
+  lastMessageAt     DateTime?
+  unreadCount       Int       @default(0)
+  createdAt         DateTime  @default(now())
+  messages          Message[]
+  assignedAgent     Agent?    @relation("AssignedChats", fields: [assignedAgentId], references: [id])
+}
+
+model Message {
+  id           Int      @id @default(autoincrement())
+  chatId       Int
+  whatsAppMessageId String?
+  type         String
+  body         String?
+  direction    String
+  status       String   @default("pending")
+  timestamp    DateTime
+  agentId      Int?
+  errorDetails String?
+  chat         Chat     @relation(fields: [chatId], references: [id])
+  agent        Agent?   @relation(fields: [agentId], references: [id])
+}
