@@ -31,12 +31,12 @@ export default function Sidebar() {
   const primaryFromPath = pathname?.toLowerCase().split('/').filter(Boolean)[1] ?? 'chats';
 
    useEffect(() => {
-    // @ts-expect-error
+    // @ts-expect-error: window.bootstrap may not be typed, but is available at runtime
     if (typeof window !== 'undefined' && window.bootstrap) {
       // Initialize all tooltips
       const tooltipTriggerList = Array.from(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
       tooltipTriggerList.forEach((tooltipTriggerEl) => {
-        // @ts-expect-error
+        // @ts-expect-error: window.bootstrap.Tooltip is not typed in TS
         new window.bootstrap.Tooltip(tooltipTriggerEl);
       });
     }
@@ -67,7 +67,7 @@ export default function Sidebar() {
       setOpenDropdown(null);
     }
     // Intentionally only depend on pathname so we react to URL changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // (Removed unused eslint-disable-next-line directive)
   }, [pathname]);
 
   const toggleDropdown = (key: string) => {
