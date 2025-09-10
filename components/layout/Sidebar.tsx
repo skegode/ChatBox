@@ -30,13 +30,13 @@ export default function Sidebar() {
   // derive current primary section from pathname so secondary content follows direct navigation too
   const primaryFromPath = pathname?.toLowerCase().split('/').filter(Boolean)[1] ?? 'chats';
 
-  useEffect(() => {
-    // @ts-ignore
+   useEffect(() => {
+    // @ts-expect-error
     if (typeof window !== 'undefined' && window.bootstrap) {
       // Initialize all tooltips
       const tooltipTriggerList = Array.from(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
       tooltipTriggerList.forEach((tooltipTriggerEl) => {
-        // @ts-ignore
+        // @ts-expect-error
         new window.bootstrap.Tooltip(tooltipTriggerEl);
       });
     }
