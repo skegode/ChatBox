@@ -159,7 +159,7 @@ function ResetPasswordContent() {
                   {!validating && !valid && !success && (
                     <div className="text-center">
                       <p className="text-muted">The link is invalid or expired.</p>
-                      <a href="/forgotpassword" className="btn btn-link">Request a new link</a>
+                      <a href="/forgotPassword" className="btn btn-link">Request a new link</a>
                     </div>
                   )}
                 </div>
