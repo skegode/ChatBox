@@ -1,8 +1,6 @@
-
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import api from '../../../lib/api';
 
@@ -11,9 +9,19 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
 
   const normalize = (p: string) => p?.trim().replace(/\s|-/g, '');
+
+  // safer typed error extractor to avoid `any`
+  const getErrorMessage = (err: unknown): string => {
+    if (err instanceof Error) return err.message;
+    if (typeof err === 'object' && err !== null) {
+      const e = err as Record<string, unknown>;
+      if (typeof e['errorMessage'] === 'string') return e['errorMessage'] as string;
+      if (typeof e['message'] === 'string') return e['message'] as string;
+    }
+    return 'Network error';
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,7 +41,7 @@ export default function ForgotPasswordPage() {
       setInfo('If the phone number exists, a password reset link has been sent.');
       setPhone('');
     } catch (err: unknown) {
-      const msg = (err as any)?.errorMessage || (err instanceof Error ? err.message : 'Network error');
+      const msg = getErrorMessage(err);
       setError(msg);
     } finally {
       setLoading(false);
