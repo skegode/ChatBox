@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 
 // The core component containing the logic and UI.
 function ResetPasswordContent() {
@@ -104,14 +105,13 @@ function ResetPasswordContent() {
         <div className="row justify-content-center">
           <div className="col-md-8 col-lg-6 col-xl-5">
             <div className="text-center mb-4">
-              {/* Using a standard <a> tag and <img> tag to avoid Next.js-specific dependencies. */}
-              <a href="/" className="auth-logo mb-5 d-block">
+              {/* Use Next.js Link for navigation */}
+              <Link href="/" className="auth-logo mb-5 d-block">
                 <img src="/images/logo.png" alt="logo" height="80" width="80" />
-              </a>
+              </Link>
               <h4>Set a new password</h4>
               <p className="text-muted mb-0">This link is one-time and will expire.</p>
             </div>
-
             <div className="card">
               <div className="card-body p-4">
                 <div className="p-3">
