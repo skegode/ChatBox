@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import api from '../../../lib/api';
 
-// The core component containing the logic and UI.
 function ResetPasswordContent() {
   const [phone, setPhone] = useState('');
   const [token, setToken] = useState('');
@@ -16,7 +16,6 @@ function ResetPasswordContent() {
   const [success, setSuccess] = useState('');
 
   useEffect(() => {
-    // We use the native browser URL API to get search parameters.
     const urlParams = new URLSearchParams(window.location.search);
     const p = urlParams.get('phonenumber') ?? urlParams.get('phone') ?? '';
     const t = urlParams.get('token') ?? '';
@@ -36,19 +35,17 @@ function ResetPasswordContent() {
       setValidating(true);
       setError('');
       try {
-        const params = new URLSearchParams({ phonenumber: normalized, token: t });
-        const res = await fetch(`/api/Auth/validate-reset?${params.toString()}`);
-        if (!res.ok) {
-          setValid(false);
-          const body = await res.json().catch(() => null);
-          setError((body && body.error) || 'Failed to validate link.');
-        } else {
-          const body = await res.json();
-          setValid(Boolean(body?.valid));
-          if (!body?.valid) setError('Invalid or expired link.');
-        }
-      } catch (err) {
-        setError('Network error while validating link.');
+        const res = await api.get('/api/Auth/validate-reset', {
+          params: { phonenumber: normalized, token: t }
+        });
+
+        const body = res.data;
+        setValid(Boolean(body?.valid));
+        if (!body?.valid) setError('Invalid or expired link.');
+      } catch (err: unknown) {
+        const msg = (err as any)?.errorMessage || 'Network error while validating link.';
+        setError(msg);
+        setValid(false);
       } finally {
         setValidating(false);
       }
@@ -74,26 +71,21 @@ function ResetPasswordContent() {
 
     setSubmitting(true);
     try {
-      const res = await fetch('/api/Auth/reset-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          PhoneNumber: phone,
-          Token: token,
-          NewPassword: newPassword
-        })
+      const resp = await api.post('/api/Auth/reset-password', {
+        PhoneNumber: phone,
+        Token: token,
+        NewPassword: newPassword
       });
 
-      if (res.ok) {
+      if (resp.status >= 200 && resp.status < 300) {
         setSuccess('Password has been reset. You may now sign in.');
-        // Use window.location.href for redirection.
-        setTimeout(() => window.location.href = '/login', 2000);
+        setTimeout(() => (window.location.href = '/login'), 2000);
       } else {
-        const body = await res.json().catch(() => null);
-        setError((body && body.error) || 'Failed to reset password.');
+        setError((resp.data && resp.data.error) || 'Failed to reset password.');
       }
-    } catch (err) {
-      setError((err instanceof Error && err.message) || 'Network error');
+    } catch (err: unknown) {
+      const msg = (err as any)?.errorMessage || (err instanceof Error ? err.message : 'Network error');
+      setError(msg);
     } finally {
       setSubmitting(false);
     }
@@ -105,7 +97,6 @@ function ResetPasswordContent() {
         <div className="row justify-content-center">
           <div className="col-md-8 col-lg-6 col-xl-5">
             <div className="text-center mb-4">
-              {/* Use Next.js Link for navigation */}
               <Link href="/" className="auth-logo mb-5 d-block">
                 <img src="/images/logo.png" alt="logo" height="80" width="80" />
               </Link>
@@ -176,7 +167,6 @@ function ResetPasswordContent() {
   );
 }
 
-// The outer component to be exported.
 export default function ResetPasswordPage() {
   return <ResetPasswordContent />;
 }

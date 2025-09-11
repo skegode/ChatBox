@@ -1,8 +1,10 @@
+
 'use client';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import api from '../../../lib/api';
 
 export default function ForgotPasswordPage() {
   const [phone, setPhone] = useState('');
@@ -25,22 +27,14 @@ export default function ForgotPasswordPage() {
 
     setLoading(true);
     try {
-      const res = await fetch('/api/Auth/forgot-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ PhoneNumber: phoneNorm })
-      });
+      await api.post('/api/Auth/forgot-password', { PhoneNumber: phoneNorm });
 
-      if (res.ok) {
-        // API intentionally returns ambiguous message so attackers can't enumerate users.
-        setInfo('If the phone number exists, a password reset link has been sent.');
-        setPhone('');
-      } else {
-        const body = await res.json().catch(() => null);
-        setError((body && body.error) || 'Failed to request reset link.');
-      }
-    } catch (err) {
-      setError((err instanceof Error && err.message) || 'Network error');
+      // API intentionally returns ambiguous message so attackers can't enumerate users.
+      setInfo('If the phone number exists, a password reset link has been sent.');
+      setPhone('');
+    } catch (err: unknown) {
+      const msg = (err as any)?.errorMessage || (err instanceof Error ? err.message : 'Network error');
+      setError(msg);
     } finally {
       setLoading(false);
     }
