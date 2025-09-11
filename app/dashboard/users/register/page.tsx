@@ -177,7 +177,7 @@ export default function RegisterPage() {
           </div>
 
           <div className='mb-4 col-md-4'>
-            <label htmlFor="department">Department (optional)</label>
+            <label htmlFor="department">Department</label>
             <select
               id="department"
               value={departmentId}
