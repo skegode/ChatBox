@@ -3,8 +3,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-// import { Button } from '../../../components/ui/Button';
-// import Input from '../../../components/ui/Input';
 import ErrorMessage from '../../../components/ui/ErrorMessage';
 import { useAuth } from '../../../components/providers/AuthProvider';
 
@@ -80,7 +78,7 @@ export default function LoginPage() {
 
                     <div className="mb-4">
                       <div className="float-end">
-                        <Link href="/auth-recoverpw" className="text-muted font-size-13">Forgot password?</Link>
+                        <Link href="/forgotPassword" className="text-muted font-size-13">Forgot password?</Link>
                       </div>
                       <label className="form-label">Password</label>
                       <div className="input-group mb-3 bg-light-subtle rounded-3">
