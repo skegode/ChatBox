@@ -16,9 +16,7 @@ export default function RegisterPage() {
   const [firstName, setFirstName] = useState('');
   const [otherName, setOtherName] = useState('');
   const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState(''); 
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [email, setEmail] = useState('');  
   const [roleId, setRoleId] = useState<number>(1);
   const [roles, setRoles] = useState<{ id: number; name: string }[]>([]);
   const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
@@ -74,22 +72,18 @@ export default function RegisterPage() {
     setError('');
     setSuccess('');
 
-    if (!firstName || !email || !phone || !password || !confirmPassword) {
-      setError('First Name, Email, Phone Number and Password are required');
+    if (!firstName || !email || !phone) {
+      setError('First Name, Email and Phone Number are required');
       return;
     }
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
+
     setLoading(true);
     try {
       await api.post('/api/Auth/register', {
         firstName,
         otherName: otherName || undefined,
         phoneNumber: phone,
-        email, // include email in payload
-        password,
+        email, // include email in payload        
         roleID: roleId,
         departmentID: departmentId // send department selection (0 = none)
       });
@@ -102,12 +96,10 @@ export default function RegisterPage() {
       setOtherName('');
       setPhone('');
       setEmail('');
-      setPassword('');
-      setConfirmPassword('');
       setRoleId(1);
       setDepartmentId(0);
     } catch (err: unknown) {
-      const errorMessage = (err as { errorMessage?: string }).errorMessage || 'Failed to sign up';
+      const errorMessage = (err as { errorMessage?: string }).errorMessage || 'Failed to create account';
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -118,135 +110,112 @@ export default function RegisterPage() {
     <ProtectedRoute requiredPolicy={PERMISSIONS.POLICY_ADMIN_ONLY}>
       <div className="bg-white p-4">
         <div className="d-flex justify-content-between align-items-center">
-          <h4 className="mb-0"><i className="ri-group-line me-2" />New User</h4> 
+          <h4 className="mb-0"><i className="ri-group-line me-2" />New User</h4>
           <Link
-              href="/dashboard/users"
-            >
-              <i className="ri-arrow-left-line me-2"></i>Users
-            </Link>
+            href="/dashboard/users"
+          >
+            <i className="ri-arrow-left-line me-2"></i>Users
+          </Link>
         </div>
         <hr />
         {error && <ErrorMessage message={error} />}
         {success && (
-            <div className="alert alert-success my-2" role="alert">
-              {success}
-            </div>
-          )}
+          <div className="alert alert-success my-2" role="alert">
+            {success}
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="row">
-            <div className='mb-4 col-md-4'>
-              <label htmlFor="FirstName">First Name</label>
-              <Input
-                id="FirstName"
-                type="text"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                placeholder="Enter your first name"
-                className="form-control"
-                autoComplete="given-name"
-              />
-            </div>
-            <div className='mb-4 col-md-4'>
-              <label htmlFor="OtherName">Other Name (Optional)</label>
-              <Input
-                id="OtherName"
-                type="text"
-                value={otherName}
-                onChange={(e) => setOtherName(e.target.value)}
-                placeholder="Enter your other name"
-                className="form-control"
-                autoComplete="additional-name"
-              />
-            </div>
-            <div className='mb-4 col-md-4'>
-              <label htmlFor="phone">Phone Number</label>
-              <Input
-                id="phone"
-                type="text"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="Enter your phone number"
-                className="form-control"
-                autoComplete="tel"
-              />
-            </div>
+          <div className='mb-4 col-md-4'>
+            <label htmlFor="FirstName">First Name</label>
+            <Input
+              id="FirstName"
+              type="text"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              placeholder="Enter your first name"
+              className="form-control"
+              autoComplete="given-name"
+            />
+          </div>
+          <div className='mb-4 col-md-4'>
+            <label htmlFor="OtherName">Other Name (Optional)</label>
+            <Input
+              id="OtherName"
+              type="text"
+              value={otherName}
+              onChange={(e) => setOtherName(e.target.value)}
+              placeholder="Enter your other name"
+              className="form-control"
+              autoComplete="additional-name"
+            />
+          </div>
+          <div className='mb-4 col-md-4'>
+            <label htmlFor="phone">Phone Number</label>
+            <Input
+              id="phone"
+              type="text"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="Enter your phone number"
+              className="form-control"
+              autoComplete="tel"
+            />
+          </div>
 
-            <div className='mb-4 col-md-4'>
-              <label htmlFor="email">Email</label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email address"
-                className="form-control"
-                autoComplete="email"
-                required
-              />
-            </div>
+          <div className='mb-4 col-md-4'>
+            <label htmlFor="email">Email</label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Enter your email address"
+              className="form-control"
+              autoComplete="email"
+              required
+            />
+          </div>
 
-            <div className='mb-4 col-md-4'>
-              <label htmlFor="department">Department (optional)</label>
-              <select
-                id="department"
-                value={departmentId}
-                onChange={e => setDepartmentId(Number(e.target.value))}
-                className="form-control"
-              >
-                <option value={0}>-- No Department --</option>
-                {departments.map(d => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
-              </select>
-            </div>
+          <div className='mb-4 col-md-4'>
+            <label htmlFor="department">Department (optional)</label>
+            <select
+              id="department"
+              value={departmentId}
+              onChange={e => setDepartmentId(Number(e.target.value))}
+              className="form-control"
+            >
+              <option value={0}>-- No Department --</option>
+              {departments.map(d => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+          </div>
 
-            <div className='mb-4 col-md-4'>
-              <label htmlFor="role">Role</label>
-              <select
-                id="role"
-                value={roleId}
-                onChange={e => setRoleId(Number(e.target.value))}
-                className="form-control"
-                required
-              >
-                {roles.map(role => (
-                  <option key={role.id} value={role.id}>{role.name}</option>
-                ))}
-              </select>
-            </div>
-            <div className='mb-4 col-md-4'>
-              <label htmlFor="password">Password</label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your password"
-                className="form-control"
-                autoComplete="new-password"
-              />
-            </div>
-            <div className='mb-4 col-md-4'>
-              <label htmlFor="confirmPassword">Confirm Password</label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirm your password"
-                className="form-control"
-                autoComplete="new-password"
-              />
-            </div>
-            <div className='mb-4 col-md-8 align-self-end text-end'>
-              <Button
-                type="submit"
-                className="btn btn-primary"
-                disabled={loading || !!success}
-              >
-                {loading ? 'Registering...' : 'Register'}
-              </Button>
-            </div>
-          </form>
+          <div className='mb-4 col-md-4'>
+            <label htmlFor="role">Role</label>
+            <select
+              id="role"
+              value={roleId}
+              onChange={e => setRoleId(Number(e.target.value))}
+              className="form-control"
+              required
+            >
+              {roles.map(role => (
+                <option key={role.id} value={role.id}>{role.name}</option>
+              ))}
+            </select>
+          </div>         
+
+          <div className='mb-4 col-md-8 align-self-end text-end'>
+            <Button
+              type="submit"
+              className="btn btn-primary"
+              disabled={loading || !!success}
+            >
+              {loading ? 'Registering...' : 'Register'}
+            </Button>
+          </div>
+        </form>
       </div>
     </ProtectedRoute>
   );
