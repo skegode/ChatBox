@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import MessageBubble from "../../../components/chat/MessageBubble";
 import MessageInput from "../../../components/chat/MessageInput";
-import api from "@/lib/api";
+import api, { MEDIA_BASE_URL } from "@/lib/api";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { PERMISSIONS } from "@/lib/permissions";
 import axios from "axios";
@@ -51,8 +51,6 @@ interface StatusPayload {
   status?: string;
   delivered?: boolean;
 }
-
-const MEDIA_BASE_URL = "https://app.servicesuitecloud.com/WhatsappApi/";
 
 // helper to detect phone-like strings so we can decide saved vs phone
 function digitsOnly(s?: string) {

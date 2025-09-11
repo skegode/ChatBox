@@ -1,9 +1,15 @@
 import axios from "axios";
 
+// central base URL for API (single source of truth)
+const BASE_API_URL = "https://app.servicesuitecloud.com/WhatsappApi";
+
+// export MEDIA_BASE_URL with a trailing slash so callers can safely append paths
+export const MEDIA_BASE_URL = `${BASE_API_URL.replace(/\/+$/, "")}/`;
+
 // Create axios instance with proper configuration
 const api = axios.create({
-  // Use HTTP for local development unless specified otherwise
-  baseURL:"https://app.servicesuitecloud.com/WhatsappApi",
+  // Use centralized base URL
+  baseURL: BASE_API_URL,
   //baseURL:"https://localhost:7003",
   withCredentials: true,
   headers: {   
