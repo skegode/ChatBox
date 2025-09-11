@@ -4,6 +4,16 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import api from '../../../lib/api';
 
+function getErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'object' && err !== null) {
+    const e = err as Record<string, unknown>;
+    if (typeof e.errorMessage === 'string') return e.errorMessage;
+    if (typeof e.message === 'string') return e.message;
+  }
+  return 'Network error';
+}
+
 function ResetPasswordContent() {
   const [phone, setPhone] = useState('');
   const [token, setToken] = useState('');
@@ -43,7 +53,7 @@ function ResetPasswordContent() {
         setValid(Boolean(body?.valid));
         if (!body?.valid) setError('Invalid or expired link.');
       } catch (err: unknown) {
-        const msg = (err as any)?.errorMessage || 'Network error while validating link.';
+        const msg = getErrorMessage(err) || 'Network error while validating link.';
         setError(msg);
         setValid(false);
       } finally {
@@ -81,10 +91,10 @@ function ResetPasswordContent() {
         setSuccess('Password has been reset. You may now sign in.');
         setTimeout(() => (window.location.href = '/login'), 2000);
       } else {
-        setError((resp.data && resp.data.error) || 'Failed to reset password.');
+        setError((resp.data && (resp.data as any).error) || 'Failed to reset password.');
       }
     } catch (err: unknown) {
-      const msg = (err as any)?.errorMessage || (err instanceof Error ? err.message : 'Network error');
+      const msg = getErrorMessage(err);
       setError(msg);
     } finally {
       setSubmitting(false);
