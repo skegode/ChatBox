@@ -16,6 +16,7 @@ export default function RegisterPage() {
   const [firstName, setFirstName] = useState('');
   const [otherName, setOtherName] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState(''); 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [roleId, setRoleId] = useState<number>(1);
@@ -73,8 +74,8 @@ export default function RegisterPage() {
     setError('');
     setSuccess('');
 
-    if (!firstName || !phone || !password || !confirmPassword) {
-      setError('First Name, Phone Number and Password are required');
+    if (!firstName || !email || !phone || !password || !confirmPassword) {
+      setError('First Name, Email, Phone Number and Password are required');
       return;
     }
     if (password !== confirmPassword) {
@@ -87,6 +88,7 @@ export default function RegisterPage() {
         firstName,
         otherName: otherName || undefined,
         phoneNumber: phone,
+        email, // include email in payload
         password,
         roleID: roleId,
         departmentID: departmentId // send department selection (0 = none)
@@ -99,6 +101,7 @@ export default function RegisterPage() {
       setFirstName('');
       setOtherName('');
       setPhone('');
+      setEmail('');
       setPassword('');
       setConfirmPassword('');
       setRoleId(1);
@@ -166,6 +169,21 @@ export default function RegisterPage() {
                 autoComplete="tel"
               />
             </div>
+
+            <div className='mb-4 col-md-4'>
+              <label htmlFor="email">Email</label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter your email address"
+                className="form-control"
+                autoComplete="email"
+                required
+              />
+            </div>
+
             <div className='mb-4 col-md-4'>
               <label htmlFor="department">Department (optional)</label>
               <select
