@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -12,6 +13,24 @@ function getErrorMessage(err: unknown): string {
     if (typeof e.message === 'string') return e.message;
   }
   return 'Network error';
+}
+
+/** Safe extractor for server response payloads */
+function extractServerError(data: unknown): string | undefined {
+  if (!data || typeof data !== 'object') return undefined;
+  const d = data as Record<string, unknown>;
+  if (typeof d.error === 'string') return d.error;
+  if (typeof d.message === 'string') return d.message;
+  // also check nested structures commonly used by some APIs
+  if (d.errors && typeof d.errors === 'object') {
+    try {
+      // try to stringify validation errors reasonably
+      return JSON.stringify(d.errors);
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
 }
 
 function ResetPasswordContent() {
@@ -50,8 +69,8 @@ function ResetPasswordContent() {
         });
 
         const body = res.data;
-        setValid(Boolean(body?.valid));
-        if (!body?.valid) setError('Invalid or expired link.');
+        setValid(Boolean((body as Record<string, unknown>)?.valid));
+        if (!((body as Record<string, unknown>)?.valid)) setError('Invalid or expired link.');
       } catch (err: unknown) {
         const msg = getErrorMessage(err) || 'Network error while validating link.';
         setError(msg);
@@ -91,10 +110,17 @@ function ResetPasswordContent() {
         setSuccess('Password has been reset. You may now sign in.');
         setTimeout(() => (window.location.href = '/login'), 2000);
       } else {
-        setError((resp.data && (resp.data as any).error) || 'Failed to reset password.');
+        const serverMsg = extractServerError(resp.data);
+        setError(serverMsg || 'Failed to reset password.');
       }
     } catch (err: unknown) {
-      const msg = getErrorMessage(err);
+      // axios wrapper may augment error with responseData / errorMessage; try those
+      const asRecord = (err as Record<string, unknown>) ?? {};
+      const augmentedMsg =
+        typeof asRecord.errorMessage === 'string' ? (asRecord.errorMessage as string) : undefined;
+      const responseData = asRecord.responseData;
+      const serverMsgFromResponse = extractServerError(responseData);
+      const msg = augmentedMsg || serverMsgFromResponse || getErrorMessage(err);
       setError(msg);
     } finally {
       setSubmitting(false);
