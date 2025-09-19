@@ -41,6 +41,9 @@ export default function ProspectsPage() {
   const [pageSize, setPageSize] = useState(25);
   const [total, setTotal] = useState(0);
 
+  // track expanded promo cells by prospect id
+  const [expandedPromoIds, setExpandedPromoIds] = useState<Set<number>>(new Set());
+
   const fetchProspects = useCallback(
     async (showLoading = true) => {
       if (showLoading) setLoading(true);
@@ -118,17 +121,27 @@ export default function ProspectsPage() {
     router.push(`/dashboard/prospects/approvalForm?${params.toString()}`);
   }
 
+  function togglePromo(id: number) {
+    setExpandedPromoIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   return (
     <ProtectedRoute requiredPermissions={['adminOnly']} requiredPolicy={PERMISSIONS.POLICY_VIEW_USERS}>
       <div className="p-4 bg-white">
         <div className="d-flex justify-content-between align-items-center">
-          <h4 className="mb-0 flex-grow-1"><i className="ri-group-line me-2" />Prospects</h4> 
+          <h4 className="mb-0 flex-grow-1" style={{fontSize: '1rem'}}><i className="ri-group-line me-2" />Prospects</h4> 
           <div className='d-flex align-items-center gap-2'>
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search name, email, phone or code"
               className="form-control"
+              style={{fontSize: '0.85rem'}}
             />
             <button
               onClick={() => {
@@ -137,27 +150,29 @@ export default function ProspectsPage() {
                 fetchProspects(true);
               }}
               className="btn btn-primary"
+              style={{fontSize: '0.85rem'}}
             >
               Clear
             </button>
             <button
               onClick={() => fetchProspects(true)}
               className="btn btn-primary"
+              style={{fontSize: '0.85rem'}}
             >
               Refresh
             </button>
-            {isRefreshing && <div className="text-sm text-gray-500">Refreshing...</div>}
+            {isRefreshing && <div className="text-sm text-gray-500" style={{fontSize: '0.8rem'}}>Refreshing...</div>}
           </div>
         </div>
         <div className="pt-3 mt-3 border-top">
           {loading ? (
-            <div className="text-center p-4">Loading prospects...</div>
+            <div className="text-center p-4" style={{fontSize: '0.9rem'}}>Loading prospects...</div>
           ) : error && (!items || items.length === 0) ? (
-            <div className="text-center p-4 text-danger">{error}</div>
+            <div className="text-center p-4 text-danger" style={{fontSize: '0.9rem'}}>{error}</div>
           ) : items && items.length > 0 ? (
             <>
               <div className='d-flex justify-content-between align-items-center'>
-                <div className="text-sm text-muted flex-grow-1">
+                <div className="text-sm text-muted flex-grow-1" style={{fontSize: '0.85rem'}}>
                   Showing page {page} of {totalPages} — {total} total
                 </div>
                 <div>
@@ -168,6 +183,7 @@ export default function ProspectsPage() {
                       setPage(1);
                     }}
                     className="form-control dropdown"
+                    style={{fontSize: '0.85rem'}}
                   >
                     <option value={10}>10</option>
                     <option value={25}>25</option>
@@ -178,58 +194,90 @@ export default function ProspectsPage() {
               </div>
               
               <div className="overflow-auto mt-3">
-                <table className="table table-responsive table-striped">
+                <table className="table table-responsive table-striped" style={{fontSize: '0.85rem'}}>
                   <thead>
                     <tr>
-                      <th>Name</th>
-                      <th>Email</th>
-                      <th>Phone</th>
-                      <th>Phone Model</th>
-                      <th>County</th>
-                      <th>Influencer Code</th>
-                      <th>Influencer</th>
-                      <th>Promo</th>
-                      <th>Created At</th>
-                      <th>Actions</th>
+                      <th style={{fontSize: '0.85rem'}}>Name</th>
+                      <th style={{fontSize: '0.85rem'}}>Email</th>
+                      <th style={{fontSize: '0.85rem'}}>Phone</th>
+                      <th style={{fontSize: '0.85rem'}}>Phone Model</th>
+                      <th style={{fontSize: '0.85rem'}}>County</th>
+                      <th style={{fontSize: '0.85rem'}}>Influencer Code</th>
+                      <th style={{fontSize: '0.85rem'}}>Influencer</th>
+                      <th style={{fontSize: '0.85rem'}}>Promo</th>
+                      <th style={{fontSize: '0.85rem'}}>Created At</th>
+                      <th style={{fontSize: '0.85rem'}}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {items.map((p) => (
-                      <tr key={p.id}>
-                        <td>{getDisplayName(p) || '—'}</td>
-                        <td>{p.email ?? '—'}</td>
-                        <td>{p.phone ?? '—'}</td>
-                        <td>{p.phoneModel ?? '—'}</td>
-                        <td>{p.county ?? '—'}</td>
-                        <td>{p.influencerCode ?? '—'}</td>
-                        <td>{p.influencerName ?? '—'}</td>
-                        <td>
+                      <tr key={p.id} style={{verticalAlign: 'middle'}}>
+                        <td style={{fontSize: '0.9rem'}}>{getDisplayName(p) || '—'}</td>
+                        <td style={{fontSize: '0.85rem'}}>{p.email ?? '—'}</td>
+                        <td style={{fontSize: '0.85rem'}}>{p.phone ?? '—'}</td>
+                        <td style={{fontSize: '0.85rem'}}>{p.phoneModel ?? '—'}</td>
+                        <td style={{fontSize: '0.85rem'}}>{p.county ?? '—'}</td>
+                        <td style={{fontSize: '0.85rem'}}>{p.influencerCode ?? '—'}</td>
+                        <td style={{fontSize: '0.85rem'}}>{p.influencerName ?? '—'}</td>
+                        <td style={{width: 220, maxWidth: 220, paddingTop: 8, paddingBottom: 8}}>
                           {p.promoCode ? (
-                            <>
-                              <span className="fw-medium">{p.promoCode}</span>
-                              <div className="text-muted d-flex flex-column">
-                                {p.promoValue != null && (
-                                  <span>Value: {p.promoValue}</span>
-                                )}
-                                {p.promoRedeemed != null && (
-                                  <span>Redeemed: {p.promoRedeemed ? 'Yes' : 'No'}</span>
-                                )}
-                                {p.promoExpiresAt && (
-                                  <span>Expires: {new Date(p.promoExpiresAt).toLocaleString()}</span>
-                                )}
+                            <div>
+                              <div
+                                onClick={() => togglePromo(p.id)}
+                                style={{
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 8,
+                                  userSelect: 'none'
+                                }}
+                                title={p.promoCode}
+                                aria-expanded={expandedPromoIds.has(p.id)}
+                              >
+                                <span
+                                  style={{
+                                    display: 'inline-block',
+                                    maxWidth: 140,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    fontWeight: 600,
+                                    fontSize: '0.9rem'
+                                  }}
+                                >
+                                  {p.promoCode}
+                                </span>
+                                <small className="text-muted" style={{fontSize: '0.75rem'}}>
+                                  {expandedPromoIds.has(p.id) ? 'Hide' : 'Details'}
+                                </small>
                               </div>
-                            </>
+
+                              {expandedPromoIds.has(p.id) && (
+                                <div style={{marginTop: 6, fontSize: '0.78rem', color: '#6c757d', lineHeight: 1.25}}>
+                                  {p.promoValue != null && (
+                                    <div>Value: {p.promoValue}</div>
+                                  )}
+                                  {p.promoRedeemed != null && (
+                                    <div>Redeemed: {p.promoRedeemed ? 'Yes' : 'No'}</div>
+                                  )}
+                                  {p.promoExpiresAt && (
+                                    <div>Expires: {new Date(p.promoExpiresAt).toLocaleString()}</div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           ) : (
-                            '—'
+                            <span style={{fontSize: '0.85rem'}}>—</span>
                           )}
                         </td>
-                        <td>
+                        <td style={{fontSize: '0.85rem'}}>
                           {p.createdAt ? new Date(p.createdAt).toLocaleString() : '—'}
                         </td>
                         <td>
                           <button
                             onClick={() => openConvertForm(p)}
                             className="btn btn-sm btn-dark"
+                            style={{fontSize: '0.8rem', padding: '0.25rem 0.5rem'}}
                           >
                             Convert
                           </button>
@@ -241,7 +289,7 @@ export default function ProspectsPage() {
               </div>
 
               <div className="mt-3 d-flex justify-content-between align-items-center">
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-gray-600" style={{fontSize: '0.85rem'}}>
                   Page {page} / {totalPages}
                 </div>
                 <div className="d-flex items-center gap-2">
@@ -249,6 +297,7 @@ export default function ProspectsPage() {
                     onClick={() => setPage((s) => Math.max(1, s - 1))}
                     disabled={page <= 1}
                     className="btn btn-sm btn-dark"
+                    style={{fontSize: '0.85rem'}}
                   >
                     <i className="ri-arrow-left-line me-2"></i> Prev
                   </button>
@@ -256,12 +305,14 @@ export default function ProspectsPage() {
                     onClick={() => setPage((s) => Math.min(totalPages, s + 1))}
                     disabled={page >= totalPages}
                     className="btn btn-sm btn-dark"
+                    style={{fontSize: '0.85rem'}}
                   >
                     Next<i className="ri-arrow-right-line ms-2"></i>
                   </button>
                   <button
                     onClick={() => fetchProspects(true)}
                     className="btn btn-sm btn-dark"
+                    style={{fontSize: '0.85rem'}}
                   >
                     Go<i className="ri-loop-right-line ms-2"></i>
                   </button>
@@ -269,7 +320,7 @@ export default function ProspectsPage() {
               </div>
             </>
           ) : (
-            <div className="text-center p-4 text-muted">No prospects found.</div>
+            <div className="text-center p-4 text-muted" style={{fontSize: '0.9rem'}}>No prospects found.</div>
           )}
         </div>
       </div>
