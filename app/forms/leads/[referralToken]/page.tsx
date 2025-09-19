@@ -304,6 +304,7 @@ export default function LeadFormPage() {
       phoneModel,
       county,
       referralToken: referralToken?.trim() || null,
+      Consent: consent,
     };
 
     try {
