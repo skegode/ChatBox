@@ -25,6 +25,9 @@ export default function LeadFormPage() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ text: string; isError?: boolean } | null>(null);
 
+  // Added consent state for privacy policy checkbox
+  const [consent, setConsent] = useState(false);
+
   useEffect(() => {
     if (urlToken) setReferralToken(urlToken);
   }, [urlToken]);
@@ -110,6 +113,10 @@ export default function LeadFormPage() {
       return setMessage({ text: 'Enter a valid email address.', isError: true });
     if (!phoneModel) return setMessage({ text: 'Select a phone model.', isError: true });
     if (!county) return setMessage({ text: 'Select a county.', isError: true });
+
+    // Ensure user consented to privacy policy
+    if (!consent) return setMessage({ text: 'You must consent to the privacy policy to continue.', isError: true });
+
     if (submitting) return;
 
     const payload = {
@@ -130,6 +137,8 @@ export default function LeadFormPage() {
       setOtherName('');
       setPhone('');
       setEmail('');
+      // reset consent after successful submit
+      setConsent(false);
     } catch (err: unknown) {
       setMessage({ text: getErrorMessage(err), isError: true });
     } finally {
@@ -140,8 +149,7 @@ export default function LeadFormPage() {
   // Consistent styles with dashboard pages
   return (
     <div className="p-4 bg-white" style={{ minHeight: '100vh', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', background: '#f1f3f4' }}>
-      <form className="mx-auto" style={{ maxWidth: 600, width: '100%', background: '#fff', borderRadius: 8, boxShadow: '0 1px 3px rgba(60,64,67,.1), 0 4px 8px rgba(60,64,67,.08)', padding: 28 }} onSubmit={handleSubmit}>
-        <h4 className="mb-0 flex-grow-1 text-center">Prospect Lead Form</h4>
+      <form className="mx-auto" style={{ maxWidth: 600, width: '100%', background: '#fff', borderRadius: 8, boxShadow: '0 1px 3px rgba(60,64,67,.1), 0 4px 8px rgba(60,64,67,.08)', padding: 28 }} onSubmit={handleSubmit}>        
         <div className="mb-3">
           <label className="form-label">First Name <span style={{ color: '#d93025' }}>*</span></label>
           <input
@@ -218,6 +226,21 @@ export default function LeadFormPage() {
             ))}
           </select>
         </div>
+
+        {/* Added privacy policy consent checkbox with link */}
+        <div className="mb-3 form-check">
+          <input
+            id="consent"
+            type="checkbox"
+            className="form-check-input"
+            checked={consent}
+            onChange={(e) => setConsent(e.target.checked)}
+          />
+          <label className="form-check-label" htmlFor="consent">
+            I consent to the <a href="https://buysimutech.co.ke/" target="_blank" rel="noopener noreferrer">privacy policy</a>.
+          </label>
+        </div>
+
         <div className="d-flex align-items-center gap-2 mt-4">
           <button
             type="submit"
@@ -235,6 +258,7 @@ export default function LeadFormPage() {
               setPhone('');
               setEmail('');
               setMessage(null);
+              setConsent(false);
             }}
             className="btn btn-light"
             style={{ visibility: 'visible' }}
