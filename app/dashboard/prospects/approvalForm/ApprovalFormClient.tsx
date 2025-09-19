@@ -38,6 +38,7 @@ export default function ApprovalFormClient() {
   const [amountFinanced, setAmountFinanced] = useState('');
   const [imei1, setImei1] = useState('');
   const [imei2, setImei2] = useState('');
+  const [productSerial, setProductSerial] = useState('');
   const [colors, setColors] = useState([] as unknown);
   const [memories, setMemories] = useState([] as unknown);
   const [phoneStates, setPhoneStates] = useState([] as unknown);
@@ -162,6 +163,7 @@ export default function ApprovalFormClient() {
         FinancedAmount: Number(amountFinanced),
         IMEI1: imei1 || null,
         IMEI2: imei2 || null,
+        ProductSerial: productSerial || null,
         ColorId: colorId === '' ? null : colorId,
         MemoryId: memoryId === '' ? null : memoryId,
         PhoneStateId: phoneStateId === '' ? null : phoneStateId,
@@ -326,6 +328,17 @@ export default function ApprovalFormClient() {
               value={imei2}
               onChange={(e) => setImei2(e.target.value)}
               className="form-control"
+            />
+          </div>
+
+          <div className="mb-3">
+            <label className="form-label">Product Serial No</label>
+            <input
+              type="text"
+              value={productSerial}
+              onChange={(e) => setProductSerial(e.target.value)}
+              className="form-control"
+              placeholder="Enter product serial number (optional)"
             />
           </div>
 
