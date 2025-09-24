@@ -107,7 +107,7 @@ export default function SelfOnboardedBorrowersPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await api.get<ApiResponse>('/api/borrowers/self-onboarded', {
+      const response = await api.get<ApiResponse>('/api/borrowers', {
         params: {
           page,
           pageSize,
@@ -130,7 +130,7 @@ export default function SelfOnboardedBorrowersPage() {
 
   const handleRowClick = async (borrowerId: number) => {
     try {
-      const response = await api.get<SelfOnboardedBorrowerProfile>(`/api/borrowers/self-onboarded/${borrowerId}`);
+      const response = await api.get<SelfOnboardedBorrowerProfile>(`/api/borrowers/${borrowerId}`);
       setSelectedBorrower(response.data);
       setIsModalOpen(true);
     } catch (err) {

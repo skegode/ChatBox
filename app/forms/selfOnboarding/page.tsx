@@ -302,7 +302,7 @@ export default function SelfOnboardingPage() {
 
     try {
       // Simulate API call to send OTP
-      await api.post('/api/borrowers/send-otp', { phoneNumber: `+254${phoneNumber.trim()}` });
+      await api.post('/api/borrowers/onboarding/otp', { phoneNumber: `+254${phoneNumber.trim()}` });
       setMessage({ text: 'OTP sent successfully! Please check your phone.', isError: false });
       setCurrentStep(2); // Move to the next step
     } catch (err: unknown) {
@@ -360,7 +360,7 @@ export default function SelfOnboardingPage() {
 
     try {
       // Simulate API call to verify OTP and submit form data
-      await api.post('/api/otp/verify-and-submit', formData);
+      await api.post('/api/borrowers/onboarding', formData);
       setMessage({ text: 'You have successfully submitted your information.' });
       setCurrentStep(3); // A final success step, or redirect
       // Clear form on success
