@@ -49,7 +49,7 @@ interface ApiResponse {
 
 // --- Helper Components ---
 
-const ProfileDetail = ({ label, value }: { label: string; value: any }) => {
+const ProfileDetail = ({ label, value }: { label: string; value: string | number | null | undefined }) => {
   if (value === null || value === undefined || value === '') return null;
   return (
     <div className="col-md-4 mb-3">
