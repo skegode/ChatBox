@@ -302,7 +302,7 @@ export default function SelfOnboardingPage() {
 
     try {
       // Simulate API call to send OTP
-      await api.post('/api/otp/send', { phoneNumber: `+254${phoneNumber.trim()}` });
+      await api.post('/api/borrowers/send-otp', { phoneNumber: `+254${phoneNumber.trim()}` });
       setMessage({ text: 'OTP sent successfully! Please check your phone.', isError: false });
       setCurrentStep(2); // Move to the next step
     } catch (err: unknown) {
