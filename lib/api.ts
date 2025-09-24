@@ -9,8 +9,8 @@ export const MEDIA_BASE_URL = `${BASE_API_URL.replace(/\/+$/, "")}/`;
 // Create axios instance with proper configuration
 const api = axios.create({
   // Use centralized base URL
-  //baseURL: BASE_API_URL,
-  baseURL:"https://localhost:7003",
+  baseURL: BASE_API_URL,
+  //baseURL:"https://localhost:7003",
   withCredentials: true,
   headers: {   
     'Accept': 'application/json'
