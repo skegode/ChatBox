@@ -361,7 +361,7 @@ export default function SelfOnboardingPage() {
     try {
       // Simulate API call to verify OTP and submit form data
       await api.post('/api/otp/verify-and-submit', formData);
-      setMessage({ text: 'Borrower onboarded successfully!' });
+      setMessage({ text: 'You have successfully submitted your information.' });
       setCurrentStep(3); // A final success step, or redirect
       // Clear form on success
       setFirstName('');
@@ -665,15 +665,15 @@ export default function SelfOnboardingPage() {
 
             {/* --- Submission Area --- */}
             <div className="d-flex align-items-center gap-2 mt-4 pt-3 border-top">
-              <button type="submit" disabled={submitting} className="btn btn-primary">
-                {submitting ? 'Sending OTP…' : 'Send OTP & Proceed'}
-              </button>
-              {message && (
-                <div className={message.isError ? 'text-danger' : 'text-success'} style={{ marginLeft: 16 }}>
-                  {message.text}
-                </div>
-              )}
-            </div>
+                <button type="submit" disabled={submitting} className="btn btn-primary">
+                  {submitting ? 'Verifying…' : 'Verify'}
+                </button>
+                {message && (
+                  <div className={message.isError ? 'text-danger' : 'text-success'} style={{ marginLeft: 16 }}>
+                    {message.text}
+                  </div>
+                )}
+              </div>
           </form>
         );
       
@@ -696,7 +696,7 @@ export default function SelfOnboardingPage() {
             </div>
             <div className="d-flex align-items-center gap-2 mt-4">
               <button type="submit" disabled={submitting} className="btn btn-primary">
-                {submitting ? 'Verifying & Submitting…' : 'Verify & Submit'}
+                {submitting ? 'Submitting…' : 'Submit'}
               </button>
               <button 
                 type="button" 
@@ -719,15 +719,7 @@ export default function SelfOnboardingPage() {
         return (
           <div className="text-center p-5">
             <h3 className="text-success mb-3">✅ Success!</h3>
-            <p className="lead">Borrower onboarded successfully.</p>
-            <button 
-              className="btn btn-primary" 
-              onClick={() => {
-                setCurrentStep(1);
-                setMessage(null);
-              }}>
-                Onboard another borrower
-            </button>
+            <p className="lead">You have successfully submitted your information.</p>
           </div>
         );
 
