@@ -14,6 +14,7 @@ type ConvertedCustomer = {
   email?: string;
   phone?: string;
   merchantName?: string;
+  influencerName?: string;
   devicePrice?: number;
   financedAmount?: number;
   imei1?: string;
@@ -120,6 +121,7 @@ export default function CustomersPage() {
                     <th>Email</th>
                     <th>Phone</th>
                     <th>Merchant</th>
+                    <th>Influencer</th>
                     <th>DevicePrice</th>
                     <th>FinancedAmount</th>
                     <th>IMEI1</th>
@@ -144,6 +146,7 @@ export default function CustomersPage() {
                         <td>{it.email ?? '—'}</td>
                         <td>{it.phone ?? '—'}</td>
                         <td>{it.merchantName ?? ''}</td>
+                        <td>{it.influencerName ?? ''}</td>
                         <td>{it.devicePrice ?? ''}</td>
                         <td>{it.financedAmount ?? ''}</td>
                         <td>{it.imei1 ?? '—'}</td>
