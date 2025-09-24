@@ -52,8 +52,12 @@ export default function Sidebar() {
       newActive = 'chats';
     } else if (!afterDashboard || afterDashboard === 'chats') {
       newActive = 'chats';
-    } else if (['users','assignments','settings','merchants','prospects','influencers'].includes(afterDashboard)) {
-      newActive = afterDashboard as typeof activeSection;
+    } else if (['users','assignments','settings','merchants','prospects','influencers', 'selfonboardedborrowers'].includes(afterDashboard)) {
+      if (afterDashboard === 'selfonboardedborrowers') {
+        newActive = 'prospects';
+      } else {
+        newActive = afterDashboard as typeof activeSection;
+      }
     } else {
       // default to chats for unrecognized segments
       newActive = 'chats';
@@ -122,6 +126,7 @@ export default function Sidebar() {
         );
 
       case 'prospects':
+      case 'selfonboardedborrowers':
         return (
           <div className='p-4'>
             <h4 className="mb-3">Prospect Management</h4>
@@ -134,6 +139,11 @@ export default function Sidebar() {
               <li>
                 <Link href="/dashboard/prospects/customers" className="border-top">
                   <i className="ri-user-follow-line me-2"></i>Converted Customers
+                </Link>
+              </li>
+              <li>
+                <Link href="/dashboard/selfOnboardedBorrowers" className="border-top">
+                  <i className="ri-user-received-2-line me-2"></i>Self-Onboarded
                 </Link>
               </li>
             </ul>
