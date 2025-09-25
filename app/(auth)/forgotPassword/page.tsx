@@ -38,7 +38,7 @@ export default function ForgotPasswordPage() {
       await api.post('/api/Auth/forgot-password', { PhoneNumber: phoneNorm });
 
       // API intentionally returns ambiguous message so attackers can't enumerate users.
-      setInfo('If the phone number exists, a password reset link has been sent.');
+      setInfo('A password reset link has been sent to your registered email.');
       setPhone('');
     } catch (err: unknown) {
       const msg = getErrorMessage(err);
