@@ -11,6 +11,12 @@ type Contact = {
   waId?: string;
 };
 
+type ApiContact = {
+  waId?: string;
+  contactId?: string;
+  name?: string;
+};
+
 type Conversation = {
   contactId: string;
   contactName?: string | null;
@@ -23,18 +29,18 @@ type Conversation = {
 // Helper function to format WhatsApp phone numbers to international format
 const formatWhatsAppNumber = (number: string): string => {
   // Remove all non-digit characters except the leading +
-  const cleaned = number.replace(/[^\d+]/g, '');
-  
+  const cleaned = number.replace(/[^\d+]/g, "");
+
   // If already starts with +, return as is
-  if (cleaned.startsWith('+')) {
+  if (cleaned.startsWith("+")) {
     return cleaned;
   }
-  
+
   // Handle numbers starting with double zeros (international format in some countries)
-  if (cleaned.startsWith('00')) {
+  if (cleaned.startsWith("00")) {
     return `+${cleaned.substring(2)}`;
   }
-  
+
   // If doesn't start with +, assume it needs a country code
   return `+${cleaned}`;
 };
@@ -48,14 +54,14 @@ const isValidWhatsAppNumber = (number: string): boolean => {
 
 // Helper function to detect if a name is actually a phone number
 function digitsOnly(s?: string) {
-  return (s ?? '').replace(/\D/g, '');
+  return (s ?? "").replace(/\D/g, "");
 }
 
 function contactNameLooksLikePhone(candidate?: string, contactId?: string) {
   if (!candidate) return false;
   const a = digitsOnly(candidate);
   if (!a) return false; // contains letters -> real name
-  const b = digitsOnly(contactId ?? '');
+  const b = digitsOnly(contactId ?? "");
   if (!b) return true; // candidate digits but no contactId -> treat as phone
   return a === b || a.endsWith(b) || b.endsWith(a);
 }
@@ -89,39 +95,42 @@ export default function BroadcastPage() {
     try {
       // Use the same endpoint as ChatList to get all conversations
       const response = await api.get("api/Messages");
-      
+
       if (Array.isArray(response.data)) {
         // Extract unique contacts from conversations
         const conversations: Conversation[] = response.data;
         const uniqueContacts = new Map<string, Contact>();
-        
-        conversations.forEach(chat => {
+
+        conversations.forEach((chat) => {
           const contactId = chat.contactId;
           if (!contactId) return;
-          
+
           // Check if the contactName is a real name or just a formatted phone number
           const rawName = chat.contactName;
           // Fix: Use null coalescing operator to handle null values
-          const isPhoneLike = contactNameLooksLikePhone(rawName ?? undefined, contactId);
-          const displayName = (rawName && !isPhoneLike) ? rawName : contactId;
-          
+          const isPhoneLike = contactNameLooksLikePhone(
+            rawName ?? undefined,
+            contactId
+          );
+          const displayName = rawName && !isPhoneLike ? rawName : contactId;
+
           uniqueContacts.set(contactId, {
-            id: contactId.startsWith('+') ? contactId : `+${contactId}`,
-            name: displayName
+            id: contactId.startsWith("+") ? contactId : `+${contactId}`,
+            name: displayName,
           });
         });
-        
+
         // Also fetch dedicated contacts if available
         try {
-          const contactsResponse = await api.get('api/Messages/contacts');
+          const contactsResponse = await api.get("api/Messages/contacts");
           if (contactsResponse.data && Array.isArray(contactsResponse.data)) {
-            contactsResponse.data.forEach((contact: any) => {
+            contactsResponse.data.forEach((contact: ApiContact) => {
               const id = contact.waId || contact.contactId;
               if (id) {
                 uniqueContacts.set(id, {
-                  id: id.startsWith('+') ? id : `+${id}`,
+                  id: id.startsWith("+") ? id : `+${id}`,
                   name: contact.name || id,
-                  waId: contact.waId
+                  waId: contact.waId,
                 });
               }
             });
@@ -129,7 +138,7 @@ export default function BroadcastPage() {
         } catch (err) {
           console.warn("Could not fetch additional contacts:", err);
         }
-        
+
         setAvailableContacts(Array.from(uniqueContacts.values()));
       }
     } catch (err) {
@@ -141,37 +150,40 @@ export default function BroadcastPage() {
   };
 
   const addNewContact = () => {
-    if (!newContactId || newContactId.trim() === '') {
+    if (!newContactId || newContactId.trim() === "") {
       setError("Please enter a valid phone number");
       return;
     }
-    
+
     const formattedId = formatWhatsAppNumber(newContactId.trim());
-    
+
     if (!isValidWhatsAppNumber(formattedId)) {
       setError("Please enter a valid WhatsApp number in international format");
       return;
     }
-    
+
     // Check if already added
-    if (selectedContacts.some(c => c.id === formattedId)) {
+    if (selectedContacts.some((c) => c.id === formattedId)) {
       setError("This contact is already added");
       return;
     }
-    
-    setSelectedContacts([...selectedContacts, {
-      id: formattedId,
-      name: formattedId
-    }]);
+
+    setSelectedContacts([
+      ...selectedContacts,
+      {
+        id: formattedId,
+        name: formattedId,
+      },
+    ]);
     setNewContactId("");
     setError(null);
   };
 
   const handleSelectContact = (contact: Contact, selected: boolean) => {
     if (selected) {
-      setSelectedContacts(prev => [...prev, contact]);
+      setSelectedContacts((prev) => [...prev, contact]);
     } else {
-      setSelectedContacts(prev => prev.filter(c => c.id !== contact.id));
+      setSelectedContacts((prev) => prev.filter((c) => c.id !== contact.id));
     }
   };
 
@@ -187,7 +199,11 @@ export default function BroadcastPage() {
 
   const removeAllContacts = () => {
     if (selectedContacts.length > 0) {
-      if (confirm(`Are you sure you want to remove all ${selectedContacts.length} selected recipients?`)) {
+      if (
+        confirm(
+          `Are you sure you want to remove all ${selectedContacts.length} selected recipients?`
+        )
+      ) {
         setSelectedContacts([]);
       }
     }
@@ -195,7 +211,8 @@ export default function BroadcastPage() {
 
   const selectAllContacts = () => {
     const notYetSelected = availableContacts.filter(
-      contact => !selectedContacts.some(selected => selected.id === contact.id)
+      (contact) =>
+        !selectedContacts.some((selected) => selected.id === contact.id)
     );
     setSelectedContacts([...selectedContacts, ...notYetSelected]);
   };
@@ -210,17 +227,17 @@ export default function BroadcastPage() {
       setError("Please enter a message or select a file");
       return;
     }
-    
+
     setSending(true);
     setError(null);
     setSuccess(null);
-    
+
     try {
       let mediaId = null;
       let mediaType = null;
       let mediaLocalPath = null;
       let mediaFileName = null;
-      
+
       if (mediaFile) {
         const fd = new FormData();
         fd.append("file", mediaFile);
@@ -236,30 +253,34 @@ export default function BroadcastPage() {
 
       // Send to each contact
       const results = await Promise.allSettled(
-        selectedContacts.map(contact => {
+        selectedContacts.map((contact) => {
           const payload = {
             ContactId: contact.id.replace(/^\+/, ""),
             MessageText: message,
           };
-          
+
           if (mediaId) {
             Object.assign(payload, {
               MediaId: mediaId,
               MediaType: mediaType,
               MediaLocalPath: mediaLocalPath,
-              MediaFileName: mediaFileName
+              MediaFileName: mediaFileName,
             });
           }
-          
+
           return api.post("/api/Messages/send", payload);
         })
       );
-      
-      const successful = results.filter(r => r.status === 'fulfilled').length;
-      const failed = results.filter(r => r.status === 'rejected').length;
-      
-      setSuccess(`Successfully sent to ${successful} contacts${failed > 0 ? ` (${failed} failed)` : ''}`);
-      
+
+      const successful = results.filter((r) => r.status === "fulfilled").length;
+      const failed = results.filter((r) => r.status === "rejected").length;
+
+      setSuccess(
+        `Successfully sent to ${successful} contacts${
+          failed > 0 ? ` (${failed} failed)` : ""
+        }`
+      );
+
       if (failed === 0) {
         // Clear form on complete success
         setMessage("");
@@ -290,16 +311,18 @@ export default function BroadcastPage() {
             <div className="card-body">
               {/* Success or Error messages */}
               {error && <div className="alert alert-danger mb-3">{error}</div>}
-              {success && <div className="alert alert-success mb-3">{success}</div>}
-              
+              {success && (
+                <div className="alert alert-success mb-3">{success}</div>
+              )}
+
               <div className="row">
                 {/* Contact selection section */}
                 <div className="col-lg-5">
                   <div className="d-flex justify-content-between align-items-center mb-3">
                     <h5 className="mb-0">Select Recipients</h5>
                     <div className="d-flex gap-2">
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         className="btn btn-sm btn-outline-primary"
                         onClick={() => setShowContactManager(true)}
                       >
@@ -307,7 +330,7 @@ export default function BroadcastPage() {
                       </button>
                     </div>
                   </div>
-                  
+
                   {/* Add new contact */}
                   <div className="mb-3">
                     <label className="form-label">Add by phone number:</label>
@@ -319,7 +342,7 @@ export default function BroadcastPage() {
                         onChange={(e) => setNewContactId(e.target.value)}
                         placeholder="e.g. +254 712 345 678"
                       />
-                      <button 
+                      <button
                         className="btn btn-primary"
                         onClick={addNewContact}
                         type="button"
@@ -327,9 +350,12 @@ export default function BroadcastPage() {
                         Add
                       </button>
                     </div>
-                    <small className="text-muted">Enter number in international format with country code (e.g. +254, +1, +44)</small>
+                    <small className="text-muted">
+                      Enter number in international format with country code
+                      (e.g. +254, +1, +44)
+                    </small>
                   </div>
-                  
+
                   {/* Selected contacts - Enhanced version */}
                   <div className="mb-3">
                     <div className="d-flex justify-content-between align-items-center mb-2">
@@ -337,8 +363,8 @@ export default function BroadcastPage() {
                         Selected Recipients ({selectedContacts.length}):
                       </label>
                       {selectedContacts.length > 0 && (
-                        <button 
-                          type="button" 
+                        <button
+                          type="button"
                           className="btn btn-sm btn-outline-danger"
                           onClick={removeAllContacts}
                         >
@@ -346,19 +372,34 @@ export default function BroadcastPage() {
                         </button>
                       )}
                     </div>
-                    <div className="border rounded p-2" style={{maxHeight: "150px", overflowY: "auto"}}>
+                    <div
+                      className="border rounded p-2"
+                      style={{ maxHeight: "150px", overflowY: "auto" }}
+                    >
                       {selectedContacts.length === 0 ? (
-                        <p key="no-selected-contacts" className="text-muted small">No contacts selected</p>
+                        <p
+                          key="no-selected-contacts"
+                          className="text-muted small"
+                        >
+                          No contacts selected
+                        </p>
                       ) : (
                         <div className="d-flex flex-wrap gap-1">
                           {selectedContacts.map((contact, index) => (
-                            <div key={`selected-${contact.id}-${index}`} className="badge bg-light text-dark p-2 d-flex align-items-center">
+                            <div
+                              key={`selected-${contact.id}-${index}`}
+                              className="badge bg-light text-dark p-2 d-flex align-items-center"
+                            >
                               {contact.name}
-                              <button 
+                              <button
                                 className="btn-close ms-2 btn-close-white"
-                                onClick={() => setSelectedContacts(prev => prev.filter(c => c.id !== contact.id))}
+                                onClick={() =>
+                                  setSelectedContacts((prev) =>
+                                    prev.filter((c) => c.id !== contact.id)
+                                  )
+                                }
                                 aria-label="Remove"
-                                style={{fontSize: "0.5rem"}}
+                                style={{ fontSize: "0.5rem" }}
                               ></button>
                             </div>
                           ))}
@@ -366,38 +407,52 @@ export default function BroadcastPage() {
                       )}
                     </div>
                   </div>
-                  
+
                   {/* Available contacts */}
                   <div className="mb-3">
                     <div className="d-flex justify-content-between align-items-center mb-2">
                       <label className="form-label mb-0">Your Contacts:</label>
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         className="btn btn-sm btn-outline-primary"
                         onClick={selectAllContacts}
                       >
                         Select All
                       </button>
                     </div>
-                    <div className="border rounded p-2" style={{maxHeight: "300px", overflowY: "auto"}}>
+                    <div
+                      className="border rounded p-2"
+                      style={{ maxHeight: "300px", overflowY: "auto" }}
+                    >
                       {loading ? (
-                        <p key="loading-contacts" className="text-muted">Loading contacts...</p>
+                        <p key="loading-contacts" className="text-muted">
+                          Loading contacts...
+                        </p>
                       ) : availableContacts.length === 0 ? (
-                        <p key="no-available-contacts" className="text-muted">No saved contacts found</p>
+                        <p key="no-available-contacts" className="text-muted">
+                          No saved contacts found
+                        </p>
                       ) : (
                         availableContacts.map((contact, index) => {
-                          const isSelected = selectedContacts.some(c => c.id === contact.id);
+                          const isSelected = selectedContacts.some(
+                            (c) => c.id === contact.id
+                          );
                           return (
-                            <div key={`available-${contact.id}-${index}`} className="form-check mb-2">
+                            <div
+                              key={`available-${contact.id}-${index}`}
+                              className="form-check mb-2"
+                            >
                               <input
                                 className="form-check-input"
                                 type="checkbox"
                                 id={`contact-${contact.id}-${index}`}
                                 checked={isSelected}
-                                onChange={(e) => handleSelectContact(contact, e.target.checked)}
+                                onChange={(e) =>
+                                  handleSelectContact(contact, e.target.checked)
+                                }
                               />
-                              <label 
-                                className="form-check-label" 
+                              <label
+                                className="form-check-label"
                                 htmlFor={`contact-${contact.id}-${index}`}
                               >
                                 {contact.name}
@@ -409,11 +464,11 @@ export default function BroadcastPage() {
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Message composition section */}
                 <div className="col-lg-7">
                   <h5 className="mb-3">Compose Message</h5>
-                  
+
                   <div className="mb-3">
                     <label className="form-label">Message Text:</label>
                     <textarea
@@ -424,9 +479,11 @@ export default function BroadcastPage() {
                       placeholder="Type your message here"
                     ></textarea>
                   </div>
-                  
+
                   <div className="mb-4">
-                    <label className="form-label">Attach Media (optional):</label>
+                    <label className="form-label">
+                      Attach Media (optional):
+                    </label>
                     {!mediaFile ? (
                       <input
                         type="file"
@@ -435,8 +492,11 @@ export default function BroadcastPage() {
                       />
                     ) : (
                       <div className="d-flex align-items-center border rounded p-2">
-                        <span className="me-auto">{mediaFile.name} ({(mediaFile.size / 1024).toFixed(1)} KB)</span>
-                        <button 
+                        <span className="me-auto">
+                          {mediaFile.name} ({(mediaFile.size / 1024).toFixed(1)}{" "}
+                          KB)
+                        </span>
+                        <button
                           type="button"
                           className="btn btn-sm btn-outline-danger"
                           onClick={clearFile}
@@ -446,16 +506,20 @@ export default function BroadcastPage() {
                       </div>
                     )}
                   </div>
-                  
+
                   <div className="text-end">
-                    <button 
+                    <button
                       className="btn btn-primary"
                       onClick={handleSendBroadcast}
                       disabled={sending}
                     >
                       {sending ? (
                         <>
-                          <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                          <span
+                            className="spinner-border spinner-border-sm me-1"
+                            role="status"
+                            aria-hidden="true"
+                          ></span>
                           Sending...
                         </>
                       ) : (
@@ -472,22 +536,34 @@ export default function BroadcastPage() {
 
       {/* Contact Manager Modal */}
       {showContactManager && (
-        <div className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-dark bg-opacity-50" 
-            style={{zIndex: 1050}}>
-          <div className="bg-white rounded shadow p-4" style={{width: '90%', maxWidth: '600px', maxHeight: '80vh', overflowY: 'auto'}}>
+        <div
+          className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-dark bg-opacity-50"
+          style={{ zIndex: 1050 }}
+        >
+          <div
+            className="bg-white rounded shadow p-4"
+            style={{
+              width: "90%",
+              maxWidth: "600px",
+              maxHeight: "80vh",
+              overflowY: "auto",
+            }}
+          >
             <div className="d-flex justify-content-between align-items-center mb-3">
               <h5 className="mb-0">Manage Recipients</h5>
-              <button 
-                type="button" 
-                className="btn-close" 
+              <button
+                type="button"
+                className="btn-close"
                 onClick={() => setShowContactManager(false)}
               ></button>
             </div>
-            
+
             <div className="mb-3">
               <h6>Selected Recipients ({selectedContacts.length})</h6>
               {selectedContacts.length === 0 ? (
-                <div className="alert alert-info">No recipients selected yet</div>
+                <div className="alert alert-info">
+                  No recipients selected yet
+                </div>
               ) : (
                 <div className="table-responsive">
                   <table className="table table-sm">
@@ -504,9 +580,13 @@ export default function BroadcastPage() {
                           <td>{contact.name}</td>
                           <td>{contact.id}</td>
                           <td>
-                            <button 
+                            <button
                               className="btn btn-sm btn-outline-danger"
-                              onClick={() => setSelectedContacts(prev => prev.filter(c => c.id !== contact.id))}
+                              onClick={() =>
+                                setSelectedContacts((prev) =>
+                                  prev.filter((c) => c.id !== contact.id)
+                                )
+                              }
                             >
                               Remove
                             </button>
@@ -518,18 +598,18 @@ export default function BroadcastPage() {
                 </div>
               )}
             </div>
-            
+
             <div className="d-flex justify-content-between">
-              <button 
-                type="button" 
+              <button
+                type="button"
                 className="btn btn-outline-secondary"
                 onClick={() => setShowContactManager(false)}
               >
                 Close
               </button>
               {selectedContacts.length > 0 && (
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   className="btn btn-outline-danger"
                   onClick={removeAllContacts}
                 >
