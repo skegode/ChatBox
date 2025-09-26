@@ -1,11 +1,23 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
-import api from "@/lib/api";
-import { useAuth } from "@/components/providers/AuthProvider";
-import { PERMISSIONS } from "@/lib/permissions";
-import { FaPaperclip, FaPaperPlane } from 'react-icons/fa';
+import api from "../../../lib/api";
+import { useAuth } from "../../../components/providers/AuthProvider";
+import { PERMISSIONS } from "../../../lib/permissions";
 import ProtectedRoute from '../../../components/ProtectedRoute';
+
+// --- SVG Icon Components ---
+const PaperclipIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+        <path d="M4.5 3a2.5 2.5 0 0 1 5 0v9a1.5 1.5 0 0 1-3 0V5a.5.5 0 0 1 1 0v7a.5.5 0 0 0 1 0V3a1.5 1.5 0 1 0-3 0v9a2.5 2.5 0 0 0 5 0V5a.5.5 0 0 1 1 0v7a3.5 3.5 0 1 1-7 0z"/>
+    </svg>
+);
+
+const PaperPlaneIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+        <path d="M15.964.686a.5.5 0 0 0-.65-.65L.767 5.855H.766l-.452.18a.5.5 0 0 0-.082.887l.41.26.001.002 4.995 3.178 3.178 4.995.002.002.26.41a.5.5 0 0 0 .886-.083l6-15Zm-1.833 1.89L6.637 10.07l-4.99-3.176 14.13-6.393Z"/>
+    </svg>
+);
+// --- End SVG Icon Components ---
 
 type Contact = {
   id: string;
@@ -28,28 +40,81 @@ type Conversation = {
   messageCount?: number;
 };
 
+type Template = {
+  name: string;
+  languageCode: string; // Updated from language_code
+  status: string;
+  components: string; // The backend sends this as a JSON string
+};
+
+type ParsedTemplateComponent = {
+  type: string;
+  text?: string;
+  format?: string;
+}
+
+type TemplateComponent = {
+  type: string;
+  parameters?: Array<{
+    type: string;
+    text: string;
+  }>;
+};
+
+type CreateTemplateComponent = {
+  type: string;
+  format?: string;
+  text: string;
+  example?: {
+    header_text?: string[];
+    body_text?: string[][];
+  };
+};
+
+type Language = {
+  code: string;
+  name: string;
+};
+
+// Partial list of supported languages
+const supportedLanguages: Language[] = [
+    { code: "af", name: "Afrikaans" }, { code: "sq", name: "Albanian" }, { code: "ar", name: "Arabic" },
+    { code: "az", name: "Azerbaijani" }, { code: "bn", name: "Bengali" }, { code: "bg", name: "Bulgarian" },
+    { code: "ca", name: "Catalan" }, { code: "zh_CN", name: "Chinese (CHN)" }, { code: "zh_HK", name: "Chinese (HKG)" },
+    { code: "zh_TW", name: "Chinese (TAI)" }, { code: "hr", name: "Croatian" }, { code: "cs", name: "Czech" },
+    { code: "da", name: "Danish" }, { code: "nl", name: "Dutch" }, { code: "en", name: "English" },
+    { code: "en_GB", name: "English (UK)" }, { code: "en_US", name: "English (US)" }, { code: "et", name: "Estonian" },
+    { code: "fil", name: "Filipino" }, { code: "fi", name: "Finnish" }, { code: "fr", name: "French" },
+    { code: "ka", name: "Georgian" }, { code: "de", name: "German" }, { code: "el", name: "Greek" },
+    { code: "gu", name: "Gujarati" }, { code: "ha", name: "Hausa" }, { code: "he", name: "Hebrew" },
+    { code: "hi", name: "Hindi" }, { code: "hu", name: "Hungarian" }, { code: "id", name: "Indonesian" },
+    { code: "ga", name: "Irish" }, { code: "it", name: "Italian" }, { code: "ja", name: "Japanese" },
+    { code: "kn", name: "Kannada" }, { code: "kk", name: "Kazakh" }, { code: "ko", name: "Korean" },
+    { code: "lt", name: "Lithuanian" }, { code: "mk", name: "Macedonian" }, { code: "ms", name: "Malay" },
+    { code: "ml", name: "Malayalam" }, { code: "mr", name: "Marathi" }, { code: "nb", name: "Norwegian" },
+    { code: "fa", name: "Persian" }, { code: "pl", name: "Polish" }, { code: "pt_BR", name: "Portuguese (BR)" },
+    { code: "pt_PT", name: "Portuguese (POR)" }, { code: "pa", name: "Punjabi" }, { code: "ro", name: "Romanian" },
+    { code: "ru", name: "Russian" }, { code: "sr", name: "Serbian" }, { code: "sk", name: "Slovak" },
+    { code: "sl", name: "Slovenian" }, { code: "es", name: "Spanish" }, { code: "es_AR", name: "Spanish (ARG)" },
+    { code: "es_ES", name: "Spanish (SPA)" }, { code: "es_MX", name: "Spanish (MEX)" }, { code: "sw", name: "Swahili" },
+    { code: "sv", name: "Swedish" }, { code: "ta", name: "Tamil" }, { code: "te", name: "Telugu" },
+    { code: "th", name: "Thai" }, { code: "tr", name: "Turkish" }, { code: "uk", name: "Ukrainian" },
+    { code: "ur", name: "Urdu" }, { code: "uz", name: "Uzbek" }, { code: "vi", name: "Vietnamese" },
+    { code: "zu", name: "Zulu" },
+];
+
+const categories = ["AUTHENTICATION", "MARKETING", "UTILITY"];
+
 // Helper function to format WhatsApp phone numbers to international format
 const formatWhatsAppNumber = (number: string): string => {
-  // Remove all non-digit characters except the leading +
   const cleaned = number.replace(/[^\d+]/g, "");
-
-  // If already starts with +, return as is
-  if (cleaned.startsWith("+")) {
-    return cleaned;
-  }
-
-  // Handle numbers starting with double zeros (international format in some countries)
-  if (cleaned.startsWith("00")) {
-    return `+${cleaned.substring(2)}`;
-  }
-
-  // If doesn't start with +, assume it needs a country code
+  if (cleaned.startsWith("+")) return cleaned;
+  if (cleaned.startsWith("00")) return `+${cleaned.substring(2)}`;
   return `+${cleaned}`;
 };
 
 // Helper function to validate WhatsApp phone numbers
 const isValidWhatsAppNumber = (number: string): boolean => {
-  // WhatsApp numbers must be in international format with + and country code
   const formatted = formatWhatsAppNumber(number);
   return /^\+\d{8,15}$/.test(formatted);
 };
@@ -62,14 +127,29 @@ function digitsOnly(s?: string) {
 function contactNameLooksLikePhone(candidate?: string, contactId?: string) {
   if (!candidate) return false;
   const a = digitsOnly(candidate);
-  if (!a) return false; // contains letters -> real name
+  if (!a) return false;
   const b = digitsOnly(contactId ?? "");
-  if (!b) return true; // candidate digits but no contactId -> treat as phone
+  if (!b) return true;
   return a === b || a.endsWith(b) || b.endsWith(a);
 }
 
-function MessageInput({ onSend }: { onSend: (text: string, file?: File | null) => Promise<boolean> }) {
-  const [text, setText] = useState("");
+function getNumBodyParams(template: Template | undefined): number {
+    if (!template) return 0;
+    try {
+        const components: ParsedTemplateComponent[] = JSON.parse(template.components);
+        const body = components.find(c => c.type.toUpperCase() === 'BODY');
+        if (!body || !body.text) return 0;
+        const matches = body.text.match(/{{\d+}}/g) || [];
+        const nums = matches.map(m => parseInt(m.replace(/{{|}}/g, '')));
+        return nums.length > 0 ? Math.max(...nums) : 0;
+    } catch (e) {
+        console.error("Failed to parse template components:", template.components, e);
+        return 0;
+    }
+}
+
+function RegularMessageInput({ onSend }: { onSend: (text: string, file?: File | null) => Promise<boolean> }) {
+    const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -116,7 +196,7 @@ function MessageInput({ onSend }: { onSend: (text: string, file?: File | null) =
           overflow: "hidden",
           resize: "none",
           minHeight: "40px",
-          maxHeight: "200px", // Optional: set a max height if needed
+          maxHeight: "200px",
         }}
       />
       <div className="d-flex justify-content-end">
@@ -128,13 +208,292 @@ function MessageInput({ onSend }: { onSend: (text: string, file?: File | null) =
           accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
         />
         <label htmlFor="fileUpload" className="btn btn-outline-secondary me-2">
-          <FaPaperclip />
+          <PaperclipIcon />
         </label>
         <button className="btn btn-primary" onClick={handleSend}>
-          <FaPaperPlane />
+          <PaperPlaneIcon />
         </button>
       </div>
     </div>
+  );
+}
+
+function TemplateMessageInput({ templates, onSend, onCreateTemplate, onSyncTemplates }: { templates: Template[]; onSend: (templateName: string, languageCode: string, components: TemplateComponent[]) => Promise<boolean>; onCreateTemplate: () => void; onSyncTemplates: () => void }) {
+  const [templateName, setTemplateName] = useState("");
+  const [languageCode, setLanguageCode] = useState("");
+  const [paramValues, setParamValues] = useState<string[]>([]);
+
+  const uniqueTemplateNames = [...new Set(templates.map(t => t.name))];
+
+  const availableLanguages = templates
+    .filter(t => t.name === templateName)
+    .map(t => ({ code: t.languageCode, status: t.status }));
+
+  useEffect(() => {
+    if (availableLanguages.length > 0 && !languageCode) {
+      const approved = availableLanguages.find(l => l.status === 'APPROVED');
+      setLanguageCode(approved ? approved.code : availableLanguages[0]?.code || "");
+    }
+  }, [templateName, availableLanguages, languageCode]);
+
+  useEffect(() => {
+    if (languageCode) {
+      const selectedTemp = templates.find(t => t.name === templateName && t.languageCode === languageCode);
+      const numParams = getNumBodyParams(selectedTemp);
+      setParamValues(Array(numParams).fill(''));
+    }
+  }, [languageCode, templateName, templates]);
+
+  const updateParam = (index: number, value: string) => {
+    const newParams = [...paramValues];
+    newParams[index] = value;
+    setParamValues(newParams);
+  };
+
+    const handleSend = async () => {
+    const components: TemplateComponent[] = [
+      {
+        type: "body",
+        parameters: paramValues.map(text => ({ type: "text", text }))
+      }
+    ];
+    
+    const success = await onSend(templateName, languageCode, components);
+    if (success) {
+      setTemplateName("");
+      setLanguageCode("");
+      setParamValues([]);
+    }
+    return success;
+  };
+
+  return (
+    <div className="d-flex flex-column gap-2">
+      <div className="d-flex justify-content-between">
+        <select
+          className="form-select me-2"
+          value={templateName}
+          onChange={(e) => {
+            setTemplateName(e.target.value);
+            setLanguageCode("");
+            setParamValues([]);
+          }}
+        >
+          <option value="">Select Template</option>
+          {uniqueTemplateNames.map(name => (
+            <option key={name} value={name}>{name}</option>
+          ))}
+        </select>
+        <div className="d-flex gap-1">
+          <button className="btn btn-sm btn-outline-info" onClick={onSyncTemplates}>
+            <i className="fas fa-sync me-1"></i>
+            Sync
+          </button>
+          <button className="btn btn-sm btn-outline-primary" onClick={onCreateTemplate}>
+            Create New
+          </button>
+        </div>
+      </div>
+      {templateName && (
+        <select
+          className="form-select"
+          value={languageCode}
+          onChange={(e) => setLanguageCode(e.target.value)}
+        >
+          <option value="">Select Language</option>
+          {availableLanguages.map(lang => (
+            <option key={lang.code} value={lang.code}>
+              {lang.code} ({lang.status})
+            </option>
+          ))}
+        </select>
+      )}
+      {paramValues.map((val, index) => (
+        <input
+          key={index}
+          type="text"
+          className="form-control"
+          placeholder={`Parameter {{${index + 1}}}`}
+          value={val}
+          onChange={(e) => updateParam(index, e.target.value)}
+        />
+      ))}
+      <div className="d-flex justify-content-end">
+        <button
+          className="btn btn-primary"
+          onClick={handleSend}
+          disabled={!templateName || !languageCode || paramValues.some(v => v === '')}
+        >
+          <PaperPlaneIcon />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CreateTemplateModal({ show, onClose, onCreate }: { show: boolean; onClose: () => void; onCreate: () => void }) {
+  const [name, setName] = useState("");
+  const [languageCode, setLanguageCode] = useState("");
+  const [category, setCategory] = useState("");
+  const [headerText, setHeaderText] = useState("");
+  const [bodyText, setBodyText] = useState("");
+  const [footerText, setFooterText] = useState("");
+  const [headerExample, setHeaderExample] = useState("");
+  const [bodyExamples, setBodyExamples] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const headerHasVar = /{{1}}/.test(headerText);
+    if (!headerHasVar) {
+      setHeaderExample("");
+    }
+
+    const matches = bodyText.match(/{{\d+}}/g) || [];
+    const numParams = matches.length > 0 ? Math.max(...matches.map(m => parseInt(m.replace(/{{|}}/g, "")))) : 0;
+    setBodyExamples(prev => {
+      const newEx = Array(numParams).fill("");
+      for (let i = 0; i < Math.min(prev.length, numParams); i++) {
+        newEx[i] = prev[i];
+      }
+      return newEx;
+    });
+  }, [headerText, bodyText]);
+
+  const handleSubmit = async () => {
+    if (!name || !languageCode || !category || !bodyText) {
+      setError("All required fields must be filled");
+      return;
+    }
+    
+    const components: CreateTemplateComponent[] = [];
+
+     if (headerText) {
+      const headerComp: CreateTemplateComponent = {
+        type: "HEADER",
+        format: "TEXT",
+        text: headerText,
+      };
+     if (/{{1}}/.test(headerText)) {
+        if (!headerExample) {
+          setError("Provide example for header variable");
+          return;
+        }
+        headerComp.example = { header_text: [headerExample] };
+      }
+      components.push(headerComp);
+    }
+
+    const bodyComp: CreateTemplateComponent = {
+      type: "BODY",
+      text: bodyText,
+    };
+    const numBodyParams = bodyExamples.length;
+    if (numBodyParams > 0) {
+      if (bodyExamples.some(e => !e)) {
+        setError("Provide examples for all body variables");
+        return;
+      }
+      bodyComp.example = { body_text: [bodyExamples] };
+    }
+    components.push(bodyComp);
+
+    if (footerText) {
+      components.push({
+        type: "FOOTER",
+        text: footerText,
+      });
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      await api.post("/api/Messages/templates", {
+        Name: name,
+        LanguageCode: languageCode,
+        Category: category,
+        Components: components,
+      });
+      onCreate();
+      onClose();
+    } catch (err) {
+      console.error("Error creating template:", err);
+      setError("Failed to create template");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!show) return null;
+
+  return (
+    <>
+      <div className="modal-backdrop fade show"></div>
+      <div className="modal fade show" style={{ display: 'block' }} tabIndex={-1}>
+        <div className="modal-dialog modal-lg">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5 className="modal-title">Create New Template</h5>
+              <button type="button" className="btn-close" onClick={onClose}></button>
+            </div>
+            <div className="modal-body">
+              {error && <div className="alert alert-danger">{error}</div>}
+              <div className="mb-3">
+                <label className="form-label">Name (lowercase letters, numbers, underscores only)</label>
+                <input type="text" className="form-control" value={name} onChange={e => setName(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))} />
+              </div>
+              <div className="mb-3">
+                <label className="form-label">Language</label>
+                <select className="form-select" value={languageCode} onChange={e => setLanguageCode(e.target.value)}>
+                  <option value="">Select Language</option>
+                  {supportedLanguages.map(lang => (
+                    <option key={lang.code} value={lang.code}>{lang.name} ({lang.code})</option>
+                  ))}
+                </select>
+              </div>
+              <div className="mb-3">
+                <label className="form-label">Category</label>
+                <select className="form-select" value={category} onChange={e => setCategory(e.target.value)}>
+                  <option value="">Select Category</option>
+                  {categories.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>              
+              <div className="mb-3">
+                <label className="form-label">Header Text (optional, use {`{{1}}`} for variable)</label>
+                <input type="text" className="form-control" value={headerText} onChange={e => setHeaderText(e.target.value)} />
+                {/{{1}}/.test(headerText) && (
+                  <input type="text" className="form-control mt-2" placeholder={`Example for {{1}}`} value={headerExample} onChange={e => setHeaderExample(e.target.value)} />
+                )}
+              </div>
+              <div className="mb-3">
+                <label className="form-label">Body Text (use {`{{1}}`}, {`{{2}}`}, etc. for variables)</label>
+                <textarea className="form-control" value={bodyText} onChange={e => setBodyText(e.target.value)} />
+                {bodyExamples.map((ex, i) => (
+                  <input key={i} type="text" className="form-control mt-2" placeholder={`Example for {{${i+1}}}`} value={ex} onChange={e => {
+                    const newEx = [...bodyExamples];
+                    newEx[i] = e.target.value;
+                    setBodyExamples(newEx);
+                  }} />
+                ))}
+              </div>
+              <div className="mb-3">
+                <label className="form-label">Footer Text (optional, no variables)</label>
+                <input type="text" className="form-control" value={footerText} onChange={e => setFooterText(e.target.value)} />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={onClose}>Close</button>
+              <button type="button" className="btn btn-primary" onClick={handleSubmit} disabled={loading}>
+                {loading ? 'Creating...' : 'Create'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -147,27 +506,24 @@ export default function BroadcastPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [showContactManager, setShowContactManager] = useState(false);
-  const router = useRouter();
-  const { isAuthenticated, checkPolicy } = useAuth();
+  const [isTemplateMode, setIsTemplateMode] = useState(false);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const { isAuthenticated } = useAuth();
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      router.push("/login");
-      return;
+    if (isAuthenticated) {
+        fetchContacts();
+        fetchTemplates();
     }
+  }, [isAuthenticated]);
 
-    fetchContacts();
-  }, [isAuthenticated, router]);
-
-  // Updated to use the same endpoint as ChatList component
   const fetchContacts = async () => {
     setLoading(true);
     try {
-      // Use the same endpoint as ChatList to get all conversations
       const response = await api.get("api/Messages");
 
       if (Array.isArray(response.data)) {
-        // Extract unique contacts from conversations
         const conversations: Conversation[] = response.data;
         const uniqueContacts = new Map<string, Contact>();
 
@@ -175,13 +531,8 @@ export default function BroadcastPage() {
           const contactId = chat.contactId;
           if (!contactId) return;
 
-          // Check if the contactName is a real name or just a formatted phone number
           const rawName = chat.contactName;
-          // Fix: Use null coalescing operator to handle null values
-          const isPhoneLike = contactNameLooksLikePhone(
-            rawName ?? undefined,
-            contactId
-          );
+          const isPhoneLike = contactNameLooksLikePhone(rawName ?? undefined, contactId);
           const displayName = rawName && !isPhoneLike ? rawName : contactId;
 
           uniqueContacts.set(contactId, {
@@ -189,31 +540,36 @@ export default function BroadcastPage() {
             name: displayName,
           });
         });
-
-        // Also fetch dedicated contacts if available
-        try {
-          const contactsResponse = await api.get("api/Messages/contacts");
-          if (contactsResponse.data && Array.isArray(contactsResponse.data)) {
-            contactsResponse.data.forEach((contact: ApiContact) => {
-              const id = contact.waId || contact.contactId;
-              if (id) {
-                uniqueContacts.set(id, {
-                  id: id.startsWith("+") ? id : `+${id}`,
-                  name: contact.name || id,
-                  waId: contact.waId,
-                });
-              }
-            });
-          }
-        } catch (err) {
-          console.warn("Could not fetch additional contacts:", err);
-        }
-
         setAvailableContacts(Array.from(uniqueContacts.values()));
       }
     } catch (err) {
       console.error("Error fetching conversations:", err);
       setError("Failed to load contacts");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchTemplates = async () => {
+    try {
+      const response = await api.get("api/Messages/templates");
+      setTemplates(response.data || []); 
+    } catch (err) {
+      console.error("Error fetching templates:", err);
+      setError("Failed to load templates");
+    }
+  };
+
+  const syncTemplates = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      await api.post("/api/Messages/templates/sync");
+      await fetchTemplates(); // Refresh the templates list after sync
+      setSuccess("Templates synced successfully");
+    } catch (err) {
+      console.error("Error syncing templates:", err);
+      setError("Failed to sync templates");
     } finally {
       setLoading(false);
     }
@@ -232,19 +588,12 @@ export default function BroadcastPage() {
       return;
     }
 
-    // Check if already added
     if (selectedContacts.some((c) => c.id === formattedId)) {
       setError("This contact is already added");
       return;
     }
 
-    setSelectedContacts([
-      ...selectedContacts,
-      {
-        id: formattedId,
-        name: formattedId,
-      },
-    ]);
+    setSelectedContacts([ ...selectedContacts, { id: formattedId, name: formattedId }]);
     setNewContactId("");
     setError(null);
   };
@@ -259,129 +608,145 @@ export default function BroadcastPage() {
 
   const removeAllContacts = () => {
     if (selectedContacts.length > 0) {
-      if (
-        confirm(
-          `Are you sure you want to remove all ${selectedContacts.length} selected recipients?`
-        )
-      ) {
         setSelectedContacts([]);
-      }
     }
   };
 
   const selectAllContacts = () => {
     const notYetSelected = availableContacts.filter(
-      (contact) =>
-        !selectedContacts.some((selected) => selected.id === contact.id)
+      (contact) => !selectedContacts.some((selected) => selected.id === contact.id)
     );
     setSelectedContacts([...selectedContacts, ...notYetSelected]);
   };
 
-  const handleSendBroadcast = async (text: string, file?: File | null) => {
-    if (selectedContacts.length === 0) {
-      setError("Please select at least one contact");
-      return false;
-    }
-
-    if (!text && !file) {
-      setError("Please enter a message or select a file");
-      return false;
-    }
-
-    setSending(true);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      let mediaId = null;
-      let mediaType = null;
-      let mediaLocalPath = null;
-      let mediaFileName = null;
-
-      if (file) {
-        const fd = new FormData();
-        fd.append("file", file);
-        const mediaResp = await api.post("/api/Messages/media", fd);
-        const mediaMeta = mediaResp?.data;
-        if (mediaMeta) {
-          mediaId = mediaMeta.mediaId;
-          mediaType = mediaMeta.mediaType;
-          mediaLocalPath = mediaMeta.mediaLocalPath;
-          mediaFileName = mediaMeta.fileName;
-        }
+  const handleSendRegularMessage = async (text: string, file?: File | null): Promise<boolean> => {
+      if (selectedContacts.length === 0) {
+          setError("Please select at least one contact");
+          return false;
       }
-
-      // Send to each contact
-      const results = await Promise.allSettled(
-        selectedContacts.map((contact) => {
-          const payload = {
-            ContactId: contact.id.replace(/^\+/, ""),
-            MessageText: text,
-          };
-
-          if (mediaId) {
-            Object.assign(payload, {
-              MediaId: mediaId,
-              MediaType: mediaType,
-              MediaLocalPath: mediaLocalPath,
-              MediaFileName: mediaFileName,
-            });
+      if (!text && !file) {
+          setError("Please enter a message or select a file");
+          return false;
+      }
+  
+      setSending(true);
+      setError(null);
+      setSuccess(null);
+  
+      try {
+          let mediaId = null;
+          let mediaType = null;
+          let mediaLocalPath = null;
+          let mediaFileName = null;
+  
+          if (file) {
+              const fd = new FormData();
+              fd.append("file", file);
+              const mediaResp = await api.post("/api/Messages/media", fd);
+              const mediaMeta = mediaResp?.data;
+              if (mediaMeta) {
+                  mediaId = mediaMeta.mediaId;
+                  mediaType = mediaMeta.mediaType;
+                  mediaLocalPath = mediaMeta.mediaLocalPath;
+                  mediaFileName = mediaMeta.fileName;
+              }
           }
-
-          return api.post("/api/Messages/send", payload);
-        })
-      );
-
-      const successful = results.filter((r) => r.status === "fulfilled").length;
-      const failed = results.filter((r) => r.status === "rejected").length;
-
-      setSuccess(
-        `Successfully sent to ${successful} contacts${
-          failed > 0 ? ` (${failed} failed)` : ""
-        }`
-      );
-
-      if (failed === 0) {
-        // Clear form on complete success
-        setSelectedContacts([]);
+  
+          const results = await Promise.allSettled(
+              selectedContacts.map((contact) => {
+                  const payload = {
+                      ContactId: contact.id.replace(/^\+/, ""),
+                      MessageText: text,
+                      MediaId: mediaId,
+                      MediaType: mediaType,
+                      MediaLocalPath: mediaLocalPath,
+                      MediaFileName: mediaFileName,
+                  };
+                  return api.post("/api/Messages/send", payload);
+              })
+          );
+  
+          const successful = results.filter((r) => r.status === "fulfilled").length;
+          const failed = results.filter((r) => r.status === "rejected").length;
+  
+          setSuccess(`Successfully sent to ${successful} contacts${failed > 0 ? ` (${failed} failed)` : ""}`);
+          if (failed === 0) {
+              setSelectedContacts([]);
+          }
+          return failed === 0;
+      } catch (err) {
+          console.error("Error sending regular broadcast:", err);
+          setError("Failed to send broadcast message");
+          return false;
+      } finally {
+          setSending(false);
       }
-
-      return true;
-    } catch (err) {
-      console.error("Error sending broadcast:", err);
-      setError("Failed to send broadcast message");
-      return false;
-    } finally {
-      setSending(false);
-    }
+  };
+  
+  const handleSendTemplateMessage = async (templateName: string, languageCode: string, components: TemplateComponent[]): Promise<boolean> => {
+      if (selectedContacts.length === 0) {
+          setError("Please select at least one contact");
+          return false;
+      }
+  
+      setSending(true);
+      setError(null);
+      setSuccess(null);
+  
+      try {
+          const results = await Promise.allSettled(
+              selectedContacts.map((contact) => {
+                  const payload = {
+                      ContactId: contact.id.replace(/^\+/, ""),
+                      TemplateName: templateName,
+                      LanguageCode: languageCode,
+                      Components: components,
+                  };
+                  return api.post("/api/Messages/send-template", payload);
+              })
+          );
+  
+          const successful = results.filter((r) => r.status === "fulfilled").length;
+          const failed = results.filter((r) => r.status === "rejected").length;
+  
+          setSuccess(`Template sent to ${successful} contacts${failed > 0 ? ` (${failed} failed)` : ""}`);
+          if (failed === 0) {
+              setSelectedContacts([]);
+          }
+          return failed === 0;
+      } catch (err) {
+          console.error("Error sending template broadcast:", err);
+          setError("Failed to send template message");
+          return false;
+      } finally {
+          setSending(false);
+      }
   };
 
   return (
     <ProtectedRoute requiredPermissions={['adminOnly']} requiredPolicy={PERMISSIONS.POLICY_ADMIN_ONLY}>
       <div className="w-100 overflow-hidden position-relative">
-        {/* Fixed Header */}
         <div className="p-3 p-lg-4 border-bottom user-chat-topbar">
           <h4 className="mb-0"><i className="ri-broadcast-line me-2" />Broadcast Message</h4>
         </div>
 
-        {/* Scrollable Content */}
         <div className="chat-conversation p-3 p-lg-4" style={{ height: 'calc(100vh - 140px)', overflowY: 'auto' }}>
-          {/* Success or Error messages */}
           {error && (
             <div className="alert alert-danger alert-dismissible fade show mb-3" role="alert">
               <i className="fas fa-exclamation-triangle me-2"></i>
               {error}
+              <button type="button" className="btn-close" onClick={() => setError(null)}></button>
             </div>
           )}
           {success && (
             <div className="alert alert-success alert-dismissible fade show mb-3" role="alert">
               <i className="fas fa-check-circle me-2"></i>
               {success}
+               <button type="button" className="btn-close" onClick={() => setSuccess(null)}></button>
             </div>
           )}
 
           <div className="row g-4">
-            {/* Recipients Selection Card */}
             <div className="col-lg-5">
               <div className="card h-100 shadow-sm">
                 <div className="card-header bg-primary text-white">
@@ -401,7 +766,6 @@ export default function BroadcastPage() {
                   </div>
                 </div>
                 <div className="card-body">
-                  {/* Quick Add Contact */}
                   <div className="mb-4">
                     <label className="form-label fw-semibold">
                       <i className="fas fa-plus-circle me-2 text-success"></i>
@@ -418,26 +782,15 @@ export default function BroadcastPage() {
                         onChange={(e) => setNewContactId(e.target.value)}
                         placeholder="e.g. +254 712 345 678"
                         onKeyPress={(e) => {
-                          if (e.key === "Enter") {
-                            addNewContact();
-                          }
+                          if (e.key === "Enter") addNewContact();
                         }}
                       />
-                      <button
-                        className="btn btn-success"
-                        onClick={addNewContact}
-                        type="button"
-                      >
+                      <button className="btn btn-success" onClick={addNewContact} type="button">
                         <i className="fas fa-plus"></i>
                       </button>
                     </div>
-                    <small className="text-muted mt-1 d-block">
-                      <i className="fas fa-info-circle me-1"></i>
-                      Enter number with country code (e.g. +254, +1, +44)
-                    </small>
                   </div>
 
-                  {/* Available Contacts */}
                   <div className="mb-3">
                     <div className="d-flex justify-content-between align-items-center mb-3">
                       <label className="form-label fw-semibold mb-0">
@@ -468,14 +821,11 @@ export default function BroadcastPage() {
                         <div className="text-center py-4 text-muted">
                           <i className="fas fa-user-slash fs-2 mb-2 d-block"></i>
                           <p className="mb-0">No saved contacts found</p>
-                          <small>Add contacts using the form above</small>
                         </div>
                       ) : (
                         <div className="row g-2">
                           {availableContacts.map((contact, index) => {
-                            const isSelected = selectedContacts.some(
-                              (c) => c.id === contact.id
-                            );
+                            const isSelected = selectedContacts.some((c) => c.id === contact.id);
                             return (
                               <div key={`available-${contact.id}-${index}`} className="col-12">
                                 <div className={`card border ${isSelected ? 'border-success bg-light' : 'border-light'} mb-1`}>
@@ -486,14 +836,9 @@ export default function BroadcastPage() {
                                         type="checkbox"
                                         id={`contact-${contact.id}-${index}`}
                                         checked={isSelected}
-                                        onChange={(e) =>
-                                          handleSelectContact(contact, e.target.checked)
-                                        }
+                                        onChange={(e) => handleSelectContact(contact, e.target.checked)}
                                       />
-                                      <label
-                                        className="form-check-label fw-medium"
-                                        htmlFor={`contact-${contact.id}-${index}`}
-                                      >
+                                      <label className="form-check-label fw-medium" htmlFor={`contact-${contact.id}-${index}`}>
                                         <div className="d-flex align-items-center">
                                           <i className="fas fa-user-circle text-muted me-2"></i>
                                           <div>
@@ -518,7 +863,6 @@ export default function BroadcastPage() {
               </div>
             </div>
 
-            {/* Message Composition Card */}
             <div className="col-lg-7">
               <div className="card h-100 shadow-sm">
                 <div className="card-header bg-success text-white">
@@ -528,11 +872,34 @@ export default function BroadcastPage() {
                   </h6>
                 </div>
                 <div className="card-body d-flex flex-column justify-content-center">
-                  {/* Message Input Section - centered vertically in the card body */}
-                  <div className="chat-input-wrapper border rounded-3 bg-white p-3 mx-auto" style={{ maxWidth: "90%" }}>
-                    <MessageInput 
-                      onSend={handleSendBroadcast}                        
-                    />
+                  <div className="d-flex justify-content-end mb-3">
+                    <div className="form-check form-switch">
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        id="templateSwitch"
+                        checked={isTemplateMode}
+                        onChange={(e) => setIsTemplateMode(e.target.checked)}
+                      />
+                      <label className="form-check-label" htmlFor="templateSwitch">
+                        Send as Template
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="chat-input-wrapper border rounded-3 bg-white p-3 mx-auto" style={{ width: "100%", maxWidth: "600px" }}>
+                    {isTemplateMode ? (
+                      <TemplateMessageInput
+                        templates={templates}
+                        onSend={handleSendTemplateMessage}
+                        onCreateTemplate={() => setShowTemplateModal(true)}
+                        onSyncTemplates={syncTemplates}
+                      />
+                    ) : (
+                      <RegularMessageInput
+                        onSend={handleSendRegularMessage}
+                      />
+                    )}
                     {sending && (
                       <div className="text-center mt-3">
                         <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
@@ -546,7 +913,6 @@ export default function BroadcastPage() {
           </div>
         </div>
 
-        {/* Enhanced Contact Manager Modal - Fixed */}
         {showContactManager && (
           <>
             <div className="modal-backdrop fade show"></div>
@@ -558,11 +924,7 @@ export default function BroadcastPage() {
                       <i className="fas fa-users-cog me-2"></i>
                       Manage Recipients
                     </h5>
-                    <button
-                      type="button"
-                      className="btn-close btn-close-white"
-                      onClick={() => setShowContactManager(false)}
-                    ></button>
+                    <button type="button" className="btn-close btn-close-white" onClick={() => setShowContactManager(false)}></button>
                   </div>
 
                   <div className="modal-body">
@@ -572,11 +934,7 @@ export default function BroadcastPage() {
                         Selected Recipients ({selectedContacts.length})
                       </h6>
                       {selectedContacts.length > 0 && (
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-outline-danger"
-                          onClick={removeAllContacts}
-                        >
+                        <button type="button" className="btn btn-sm btn-outline-danger" onClick={removeAllContacts}>
                           <i className="fas fa-trash me-1"></i>
                           Clear All
                         </button>
@@ -587,9 +945,6 @@ export default function BroadcastPage() {
                       <div className="text-center py-5">
                         <i className="fas fa-user-plus fs-1 text-muted mb-3 d-block"></i>
                         <h6 className="text-muted">No recipients selected yet</h6>
-                        <p className="text-muted small mb-0">
-                          Select contacts from your contact list or add them manually
-                        </p>
                       </div>
                     ) : (
                       <div className="table-responsive">
@@ -616,11 +971,7 @@ export default function BroadcastPage() {
                                 <td>
                                   <button
                                     className="btn btn-sm btn-outline-danger"
-                                    onClick={() =>
-                                      setSelectedContacts((prev) =>
-                                        prev.filter((c) => c.id !== contact.id)
-                                      )
-                                    }
+                                    onClick={() => setSelectedContacts((prev) => prev.filter((c) => c.id !== contact.id))}
                                   >
                                     <i className="fas fa-times"></i>
                                   </button>
@@ -634,30 +985,22 @@ export default function BroadcastPage() {
                   </div>
 
                   <div className="modal-footer">
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={() => setShowContactManager(false)}
-                    >
+                    <button type="button" className="btn btn-secondary" onClick={() => setShowContactManager(false)}>
                       <i className="fas fa-times me-1"></i>
                       Close
                     </button>
-                    {selectedContacts.length > 0 && (
-                      <button
-                        type="button"
-                        className="btn btn-primary ms-2"
-                        onClick={() => setShowContactManager(false)}
-                      >
-                        <i className="fas fa-check me-1"></i>
-                        Continue with {selectedContacts.length} Recipients
-                      </button>
-                    )}
                   </div>
                 </div>
               </div>
             </div>
           </>
         )}
+
+        <CreateTemplateModal
+          show={showTemplateModal}
+          onClose={() => setShowTemplateModal(false)}
+          onCreate={fetchTemplates}
+        />
       </div>
     </ProtectedRoute>
   );
