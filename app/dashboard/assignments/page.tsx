@@ -110,57 +110,66 @@ export default function ContactAssignmentPage() {
           ))}
         </div>
         
-        {/* Contact management */}
-        {selectedAgent && (
-          <div className={`modal fade${showModal ? ' show d-block' : ''}`} tabIndex={-1} role="dialog" style={showModal ? { background: 'rgba(0,0,0,0.5)' } : {}}>
-            <div className="modal-dialog modal-lg" role="document">
-              <div className="modal-content">
-                <div className="modal-header">
-                  <h5 className="modal-title text-blue-600">{selectedAgentDetails?.firstName} {selectedAgentDetails?.otherName}</h5>
-                  <button type="button" className="btn-close" aria-label="Close" onClick={() => setShowModal(false)}></button>
-                </div>
-                <div className="modal-body">
-                  {contacts.length === 0 ? (
-                    <p className="text-gray-500">No contacts assigned to this agent</p>
-                  ) : (
-                    <ul className="list-group">
-                      {contacts.map(contact => (
-                        <li key={contact.id} className="list-group-item d-flex flex-column flex-md-row align-items-start justify-content-md-between gap-2 py-3">
-                          <div>
-                            <span className="font-mono text-lg text-dark">{contact.phoneNumber}</span> | 
-                            <span className="ms-2 text-xs text-secondary">
-                              {new Date(contact.assignedDate).toLocaleString()}
-                            </span>
-                            <p className="text-sm text-secondary mt-1">{contact.lastMessage || <span className="fst-italic text-muted">No messages</span>}</p>
-                          </div>
-                          {/* Reassignment dropdown */}
-                          <div>
-                            <select
-                              className="form-select"
-                              onChange={(e) => handleAssign(contact.phoneNumber, parseInt(e.target.value))}
-                              defaultValue=""
-                            >
-                              <option value="" disabled>Reassign to...</option>
-                              {agents.map(agent => (
-                                <option key={agent.id} value={agent.id} disabled={agent.id === selectedAgent}>
-                                  {agent.firstName} {agent.otherName}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-                <div className="modal-footer">
-                  <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>
-                    Close
-                  </button>
+                {/* Contact management */}
+        {selectedAgent && showModal && (
+          <>
+            {/* Modal backdrop */}
+            <div 
+              className="modal-backdrop fade show" 
+              onClick={() => setShowModal(false)}
+            ></div>
+            
+            {/* Modal dialog */}
+            <div className="modal fade show" style={{ display: 'block' }} tabIndex={-1} role="dialog">
+              <div className="modal-dialog modal-lg" role="document">
+                <div className="modal-content">
+                  <div className="modal-header">
+                    <h5 className="modal-title text-blue-600">{selectedAgentDetails?.firstName} {selectedAgentDetails?.otherName}</h5>
+                    <button type="button" className="btn-close" aria-label="Close" onClick={() => setShowModal(false)}></button>
+                  </div>
+                  <div className="modal-body">
+                    {contacts.length === 0 ? (
+                      <p className="text-gray-500">No contacts assigned to this agent</p>
+                    ) : (
+                      <ul className="list-group">
+                        {contacts.map(contact => (
+                          <li key={contact.id} className="list-group-item d-flex flex-column flex-md-row align-items-start justify-content-md-between gap-2 py-3">
+                            <div>
+                              <span className="font-mono text-lg text-dark">{contact.phoneNumber}</span> | 
+                              <span className="ms-2 text-xs text-secondary">
+                                {new Date(contact.assignedDate).toLocaleString()}
+                              </span>
+                              <p className="text-sm text-secondary mt-1">{contact.lastMessage || <span className="fst-italic text-muted">No messages</span>}</p>
+                            </div>
+                            {/* Reassignment dropdown */}
+                            <div>
+                              <select
+                                className="form-select"
+                                onChange={(e) => handleAssign(contact.phoneNumber, parseInt(e.target.value))}
+                                defaultValue=""
+                              >
+                                <option value="" disabled>Reassign to...</option>
+                                {agents.map(agent => (
+                                  <option key={agent.id} value={agent.id} disabled={agent.id === selectedAgent}>
+                                    {agent.firstName} {agent.otherName}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  <div className="modal-footer">
+                    <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>
+                      Close
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          </>
         )}
       </div>
     </ProtectedRoute>

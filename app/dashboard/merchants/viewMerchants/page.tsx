@@ -48,45 +48,50 @@ export default function ViewMerchantsPage() {
 
   return (
     <ProtectedRoute requiredPermissions={['adminOnly']} requiredPolicy={PERMISSIONS.POLICY_VIEW_USERS}>
-      <div className="bg-white p-4">
-        <div className="d-flex justify-content-between align-items-center">
-          <h4 className="mb-0"><i className="ri-function-line me-2" />Merchants</h4> 
-          <Link
-              href="/dashboard/merchants/addMerchant"
-            >
+      <div className="w-100 overflow-hidden position-relative">
+        {/* Fixed Header */}
+        <div className="p-3 p-lg-4 border-bottom user-chat-topbar">
+          <div className="d-flex justify-content-between align-items-center">
+            <h4 className="mb-0"><i className="ri-function-line me-2" />Merchants</h4> 
+            <Link href="/dashboard/merchants/addMerchant" className="btn btn-success">
               <i className="ri-add-line me-2"></i>Add Merchant
             </Link>
+          </div>
         </div>
-        <div className="pt-3 mt-3 border-top">
+
+        {/* Scrollable Content */}
+        <div className="chat-conversation p-3 p-lg-4" style={{ height: 'calc(100vh - 140px)', overflowY: 'auto' }}>
           {loading ? (
             <div className="text-center p-4">Loading merchants...</div>
           ) : error ? (
             <div className="text-center text-danger p-4">{error}</div>
           ) : merchants && merchants.length > 0 ? (
-            <table className="table table-striped">
-              <thead>
-                <tr>
-                  <th>Business Name</th>
-                  <th>Email</th>
-                  <th>Phone</th>
-                  <th>Geo Location</th>
-                  <th>Created At</th>
-                </tr>
-              </thead>
-              <tbody>
-                {merchants.map((m) => (
-                  <tr key={m.id} className="hover:bg-gray-50">
-                    <td>{m.businessName ?? '—'}</td>
-                    <td>{m.emailAddress ?? '—'}</td>
-                    <td>{m.phoneNumber ?? '—'}</td>
-                    <td>{m.geoLocation ?? '—'}</td>
-                    <td>
-                      {m.createdAt ? new Date(m.createdAt).toLocaleString() : '—'}
-                    </td>
+            <div className="table-responsive">
+              <table className="table table-striped">
+                <thead className="table-light sticky-top">
+                  <tr>
+                    <th>Business Name</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                    <th>Geo Location</th>
+                    <th>Created At</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {merchants.map((m) => (
+                    <tr key={m.id}>
+                      <td>{m.businessName ?? '—'}</td>
+                      <td>{m.emailAddress ?? '—'}</td>
+                      <td>{m.phoneNumber ?? '—'}</td>
+                      <td>{m.geoLocation ?? '—'}</td>
+                      <td>
+                        {m.createdAt ? new Date(m.createdAt).toLocaleString() : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <div className="p-4 text-center text-muted">No merchants found.</div>
           )}

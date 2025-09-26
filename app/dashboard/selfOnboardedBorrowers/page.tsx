@@ -140,132 +140,140 @@ export default function SelfOnboardedBorrowersPage() {
 
   const totalPages = Math.ceil(total / pageSize);
 
-  return (
+    return (
     <ProtectedRoute requiredPermissions={['adminOnly']} requiredPolicy={PERMISSIONS.POLICY_VIEW_USERS}>
-      <div className="p-4 bg-white">
-        <h4 className="mb-4" style={{fontSize: '1rem'}}><i className="ri-group-line me-2" />Self-Onboarded Borrowers</h4>
-
-        <div className="mb-4">
-          <input
-            type="text"
-            placeholder="Search by name, phone, email, or ID..."
-            value={searchTerm}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
-            className="form-control"
-            style={{fontSize: '0.85rem', maxWidth: '320px'}}
-          />
+      <div className="w-100 overflow-hidden position-relative">
+        {/* Fixed Header */}
+        <div className="p-3 p-lg-4 border-bottom user-chat-topbar">
+          <h4 className="mb-4" style={{fontSize: '1rem'}}><i className="ri-group-line me-2" />Self-Onboarded Borrowers</h4>
+          <div className="mb-0">
+            <input
+              type="text"
+              placeholder="Search by name, phone, email, or ID..."
+              value={searchTerm}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+              className="form-control"
+              style={{fontSize: '0.85rem', maxWidth: '320px'}}
+            />
+          </div>
         </div>
 
-        {isLoading && <p>Loading...</p>}
-        {error && <p className="text-danger">{error}</p>}
+        {/* Scrollable Content */}
+        <div className="chat-conversation p-3 p-lg-4" style={{ height: 'calc(100vh - 180px)', overflowY: 'auto' }}>
+          {isLoading && <p>Loading...</p>}
+          {error && <p className="text-danger">{error}</p>}
 
-        {!isLoading && !error && (
-          <>
-            <div className="overflow-auto">
-              <table className="table table-responsive table-striped" style={{fontSize: '0.85rem'}}>
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>National ID</th>
-                    <th>Phone Number</th>
-                    <th>Email</th>
-                    <th>Onboarded At</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {borrowers.length > 0 ? (
-                    borrowers.map((borrower) => (
-                      <tr key={borrower.id} onClick={() => handleRowClick(borrower.id)} style={{cursor: 'pointer'}}>
-                        <td>{`${borrower.firstName} ${borrower.otherName}`}</td>
-                        <td>{borrower.nationalID}</td>
-                        <td>{borrower.phoneNumber}</td>
-                        <td>{borrower.emailAddress}</td>
-                        <td>{new Date(borrower.createdAt).toLocaleDateString()}</td>
-                      </tr>
-                    ))
-                  ) : (
+          {!isLoading && !error && (
+            <>
+              <div className="table-responsive">
+                <table className="table table-striped" style={{fontSize: '0.85rem'}}>
+                  <thead className="table-light sticky-top">
                     <tr>
-                      <td colSpan={5} className="text-center text-muted">
-                        No borrowers found.
-                      </td>
+                      <th>Name</th>
+                      <th>National ID</th>
+                      <th>Phone Number</th>
+                      <th>Email</th>
+                      <th>Onboarded At</th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="d-flex justify-content-between align-items-center mt-3">
-              <div style={{fontSize: '0.85rem'}}>
-                Page {page} of {totalPages}
+                  </thead>
+                  <tbody>
+                    {borrowers.length > 0 ? (
+                      borrowers.map((borrower) => (
+                        <tr key={borrower.id} onClick={() => handleRowClick(borrower.id)} style={{cursor: 'pointer'}}>
+                          <td>{`${borrower.firstName} ${borrower.otherName}`}</td>
+                          <td>{borrower.nationalID}</td>
+                          <td>{borrower.phoneNumber}</td>
+                          <td>{borrower.emailAddress}</td>
+                          <td>{new Date(borrower.createdAt).toLocaleDateString()}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="text-center text-muted">
+                          No borrowers found.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
-              <div className="d-flex align-items-center gap-2">
-                <button
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
-                  disabled={page <= 1}
-                  className="btn btn-sm btn-dark"
-                >
-                  Previous
-                </button>
-                <button
-                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                  disabled={page >= totalPages}
-                  className="btn btn-sm btn-dark"
-                >
-                  Next
-                </button>
+
+              <div className="d-flex justify-content-between align-items-center mt-3">
+                <div style={{fontSize: '0.85rem'}}>
+                  Page {page} of {totalPages}
+                </div>
+                <div className="d-flex align-items-center gap-2">
+                  <button
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={page <= 1}
+                    className="btn btn-sm btn-dark"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    disabled={page >= totalPages}
+                    className="btn btn-sm btn-dark"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Profile Modal - Fixed */}
+        {isModalOpen && (
+          <>
+            <div className="modal-backdrop fade show"></div>
+            <div className="modal fade show" style={{ display: 'block' }} tabIndex={-1} role="dialog">
+              <div className="modal-dialog modal-dialog-scrollable modal-xl">
+                <div className="modal-content">
+                  <div className="modal-header">
+                    <h5 className="modal-title">Borrower Profile</h5>
+                    <button type="button" className="btn-close" onClick={() => setIsModalOpen(false)}></button>
+                  </div>
+                  <div className="modal-body">
+                    <p>Full details for {selectedBorrower?.firstName} {selectedBorrower?.otherName}.</p>
+                    {selectedBorrower && (
+                      <div className="container-fluid">
+                        <div className="row">
+                          <ProfileDetail label="Full Name" value={`${selectedBorrower.firstName} ${selectedBorrower.otherName}`} />
+                          <ProfileDetail label="National ID" value={selectedBorrower.nationalID} />
+                          <ProfileDetail label="Date of Birth" value={selectedBorrower.dob ? new Date(selectedBorrower.dob).toLocaleDateString() : 'N/A'} />
+                          <ProfileDetail label="Gender" value={selectedBorrower.gender} />
+                          <ProfileDetail label="Phone Number" value={selectedBorrower.phoneNumber} />
+                          <ProfileDetail label="Email" value={selectedBorrower.emailAddress} />
+                          <ProfileDetail label="Physical Address" value={selectedBorrower.physicalAddress} />
+                          <ProfileDetail label="Postal Address" value={selectedBorrower.postalAddress} />
+                          <ProfileDetail label="Phone Type" value={selectedBorrower.phoneType} />
+                          <ProfileDetail label="Color" value={selectedBorrower.color} />
+                          <ProfileDetail label="Memory" value={selectedBorrower.memory} />
+                          <ProfileDetail label="Phone State" value={selectedBorrower.phoneState} />
+                          <ProfileDetail label="Device Price" value={selectedBorrower.deviceCashPrice.toFixed(2)} />
+                          <ProfileDetail label="Deposit" value={selectedBorrower.deposit.toFixed(2)} />
+                          <ProfileDetail label="Amount Financed" value={selectedBorrower.amountFinanced.toFixed(2)} />
+                          <ProfileDetail label="Total Due" value={selectedBorrower.totalDue.toFixed(2)} />
+                          <ProfileDetail label="Loan Tenure" value={`${selectedBorrower.loanTenure} months`} />
+                          <ProfileDetail label="Payment Type" value={selectedBorrower.paymentType} />
+                        </div>
+                        <div className="row border-top pt-4 mt-4">
+                          <div className="col-md-3"><PhotoDisplay label="Borrower Photo" path={selectedBorrower.borrowerPhotoPath} /></div>
+                          <div className="col-md-3"><PhotoDisplay label="ID Front" path={selectedBorrower.idFrontPhotoPath} /></div>
+                          <div className="col-md-3"><PhotoDisplay label="ID Back" path={selectedBorrower.idBackPhotoPath} /></div>
+                          <div className="col-md-3"><PhotoDisplay label="Passport Photo" path={selectedBorrower.passportPhotoPath} /></div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="modal-footer">
+                    <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Close</button>
+                  </div>
+                </div>
               </div>
             </div>
           </>
-        )}
-
-        {/* Profile Modal */}
-        {isModalOpen && (
-          <div className="modal d-block" style={{backgroundColor: 'rgba(0,0,0,0.5)'}}>
-            <div className="modal-dialog modal-dialog-scrollable modal-xl">
-              <div className="modal-content">
-                <div className="modal-header">
-                  <h5 className="modal-title">Borrower Profile</h5>
-                  <button type="button" className="btn-close" onClick={() => setIsModalOpen(false)}></button>
-                </div>
-                <div className="modal-body">
-                  <p>Full details for {selectedBorrower?.firstName} {selectedBorrower?.otherName}.</p>
-                  {selectedBorrower && (
-                    <div className="container-fluid">
-                      <div className="row">
-                        <ProfileDetail label="Full Name" value={`${selectedBorrower.firstName} ${selectedBorrower.otherName}`} />
-                        <ProfileDetail label="National ID" value={selectedBorrower.nationalID} />
-                        <ProfileDetail label="Date of Birth" value={selectedBorrower.dob ? new Date(selectedBorrower.dob).toLocaleDateString() : 'N/A'} />
-                        <ProfileDetail label="Gender" value={selectedBorrower.gender} />
-                        <ProfileDetail label="Phone Number" value={selectedBorrower.phoneNumber} />
-                        <ProfileDetail label="Email" value={selectedBorrower.emailAddress} />
-                        <ProfileDetail label="Physical Address" value={selectedBorrower.physicalAddress} />
-                        <ProfileDetail label="Postal Address" value={selectedBorrower.postalAddress} />
-                        <ProfileDetail label="Phone Type" value={selectedBorrower.phoneType} />
-                        <ProfileDetail label="Color" value={selectedBorrower.color} />
-                        <ProfileDetail label="Memory" value={selectedBorrower.memory} />
-                        <ProfileDetail label="Phone State" value={selectedBorrower.phoneState} />
-                        <ProfileDetail label="Device Price" value={selectedBorrower.deviceCashPrice.toFixed(2)} />
-                        <ProfileDetail label="Deposit" value={selectedBorrower.deposit.toFixed(2)} />
-                        <ProfileDetail label="Amount Financed" value={selectedBorrower.amountFinanced.toFixed(2)} />
-                        <ProfileDetail label="Total Due" value={selectedBorrower.totalDue.toFixed(2)} />
-                        <ProfileDetail label="Loan Tenure" value={`${selectedBorrower.loanTenure} months`} />
-                        <ProfileDetail label="Payment Type" value={selectedBorrower.paymentType} />
-                      </div>
-                      <div className="row border-top pt-4 mt-4">
-                        <div className="col-md-3"><PhotoDisplay label="Borrower Photo" path={selectedBorrower.borrowerPhotoPath} /></div>
-                        <div className="col-md-3"><PhotoDisplay label="ID Front" path={selectedBorrower.idFrontPhotoPath} /></div>
-                        <div className="col-md-3"><PhotoDisplay label="ID Back" path={selectedBorrower.idBackPhotoPath} /></div>
-                        <div className="col-md-3"><PhotoDisplay label="Passport Photo" path={selectedBorrower.passportPhotoPath} /></div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div className="modal-footer">
-                  <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Close</button>
-                </div>
-              </div>
-            </div>
-          </div>
         )}
       </div>
     </ProtectedRoute>

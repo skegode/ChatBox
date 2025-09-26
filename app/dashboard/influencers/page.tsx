@@ -77,46 +77,52 @@ export default function InfluencersPage() {
 
   return (
     <ProtectedRoute requiredPermissions={['adminOnly']} requiredPolicy={PERMISSIONS.POLICY_VIEW_USERS}>
-      <div className="p-4 bg-white">
-        <div className="d-flex justify-content-between align-items-center">
-          <h4 className="mb-0 flex-grow-1"><i className="ri-group-line me-2" />Influencers</h4> 
-          <div className='d-flex align-items-center gap-2'>
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Name, Alias, Email or Phone"
-              className="form-control"
-            />
-            <button
-              onClick={() => {
-                setPage(1);
-                setQ('');
-                fetchInfluencers(true);
-              }}
-              className="btn btn-primary"
-            >
-              Clear
-            </button>
-            <button
-              onClick={() => fetchInfluencers(true)}
-              className="btn btn-primary"
-            >
-              Refresh
-            </button>
-            {isRefreshing && <div className="text-sm text-gray-500">Refreshing...</div>}
+      <div className="w-100 overflow-hidden position-relative">
+        {/* Fixed Header */}
+        <div className="p-3 p-lg-4 border-bottom user-chat-topbar">
+          <div className="d-flex justify-content-between align-items-center">
+            <h4 className="mb-0 flex-grow-1"><i className="ri-group-line me-2" />Influencers</h4> 
+            <div className='d-flex align-items-center gap-2'>
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Name, Alias, Email or Phone"
+                className="form-control"
+                style={{fontSize: '0.85rem'}}
+              />
+              <button
+                onClick={() => {
+                  setPage(1);
+                  setQ('');
+                  fetchInfluencers(true);
+                }}
+                className="btn btn-primary"
+                style={{fontSize: '0.85rem'}}
+              >
+                Clear
+              </button>
+              <button
+                onClick={() => fetchInfluencers(true)}
+                className="btn btn-primary"
+                style={{fontSize: '0.85rem'}}
+              >
+                Refresh
+              </button>
+              {isRefreshing && <div className="text-sm text-gray-500" style={{fontSize: '0.8rem'}}>Refreshing...</div>}
+            </div>
           </div>
         </div>
-        
 
-        <div className="pt-3 mt-3 border-top">
+        {/* Scrollable Content */}
+        <div className="chat-conversation p-3 p-lg-4" style={{ height: 'calc(100vh - 140px)', overflowY: 'auto' }}>
           {loading ? (
-            <div className="text-center p-4">Loading influencers...</div>
+            <div className="text-center p-4" style={{fontSize: '0.9rem'}}>Loading influencers...</div>
           ) : error && (!items || items.length === 0) ? (
-            <div className="text-center p-4 text-danger">{error}</div>
+            <div className="text-center p-4 text-danger" style={{fontSize: '0.9rem'}}>{error}</div>
           ) : items && items.length > 0 ? (
             <>
-              <div className='d-flex justify-content-between align-items-center'>
-                <div className="text-sm text-muted flex-grow-1">
+              <div className='d-flex justify-content-between align-items-center mb-3'>
+                <div className="text-sm text-muted flex-grow-1" style={{fontSize: '0.85rem'}}>
                   Showing page {page} of {totalPages} — {total} total
                 </div>
                 <div>
@@ -127,6 +133,7 @@ export default function InfluencersPage() {
                       setPage(1);
                     }}
                     className="form-control dropdown"
+                    style={{fontSize: '0.85rem'}}
                   >
                     <option value={10}>10</option>
                     <option value={25}>25</option>
@@ -136,9 +143,9 @@ export default function InfluencersPage() {
                 </div>
               </div>
 
-              <div className="overflow-auto mt-3">
-                <table className="table table-responsive table-striped">
-                  <thead>
+              <div className="table-responsive">
+                <table className="table table-striped" style={{fontSize: '0.85rem'}}>
+                  <thead className="table-light sticky-top">
                     <tr>
                       <th>Name</th>
                       <th>Alias</th>
@@ -164,8 +171,9 @@ export default function InfluencersPage() {
                   </tbody>
                 </table>
               </div>
+
               <div className="mt-3 d-flex justify-content-between align-items-center">
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-gray-600" style={{fontSize: '0.85rem'}}>
                   Page {page} / {totalPages}
                 </div>
                 <div className="d-flex items-center gap-2">
@@ -173,6 +181,7 @@ export default function InfluencersPage() {
                     onClick={() => setPage((s) => Math.max(1, s - 1))}
                     disabled={page <= 1}
                     className="btn btn-sm btn-dark"
+                    style={{fontSize: '0.85rem'}}
                   >
                     <i className="ri-arrow-left-line me-2"></i> Prev
                   </button>
@@ -180,12 +189,14 @@ export default function InfluencersPage() {
                     onClick={() => setPage((s) => Math.min(totalPages, s + 1))}
                     disabled={page >= totalPages}
                     className="btn btn-sm btn-dark"
+                    style={{fontSize: '0.85rem'}}
                   >
                     Next<i className="ri-arrow-right-line ms-2"></i>
                   </button>
                   <button
                     onClick={() => fetchInfluencers(true)}
                     className="btn btn-sm btn-dark"
+                    style={{fontSize: '0.85rem'}}
                   >
                     Go<i className="ri-loop-right-line ms-2"></i>
                   </button>
@@ -193,7 +204,7 @@ export default function InfluencersPage() {
               </div>
             </>
           ) : (
-            <div className="text-center p-4 text-muted">No influencers found.</div>
+            <div className="text-center p-4 text-muted" style={{fontSize: '0.9rem'}}>No influencers found.</div>
           )}
         </div>
       </div>

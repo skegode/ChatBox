@@ -109,85 +109,100 @@ export default function UsersPage() {
     } finally {
       setEditLoading(false);
     }
-  };
+  }; 
 
   return (
     <ProtectedRoute requiredPermissions={['adminOnly']} requiredPolicy={PERMISSIONS.POLICY_VIEW_USERS}>
-      <div className="bg-white p-4">
-        <div className="d-flex justify-content-between align-items-center">
-          <h4 className="mb-0"><i className="ri-group-line me-2" />Users</h4> 
-          <div className="d-flex align-items-center">
-            <button onClick={() => fetchUsers(true)} className="btn btn-primary me-3">Refresh</button>
-            {isRefreshing && <div className="text-sm text-gray-500">Refreshing...</div>}
+      <div className="w-100 overflow-hidden position-relative">
+        {/* Fixed Header */}
+        <div className="p-3 p-lg-4 border-bottom user-chat-topbar">
+          <div className="d-flex justify-content-between align-items-center">
+            <h4 className="mb-0"><i className="ri-group-line me-2" />Users</h4> 
+            <div className="d-flex align-items-center">
+              <Link href="/dashboard/users/register" className="btn btn-success me-2">
+                <i className="ri-user-add-line me-1"></i>New User
+              </Link>
+              <button onClick={() => fetchUsers(true)} className="btn btn-primary me-3">Refresh</button>
+              {isRefreshing && <div className="text-sm text-gray-500">Refreshing...</div>}
+            </div>
           </div>
         </div>
-        <div className="pt-3 mt-3 border-top">
+
+        {/* Scrollable Content */}
+        <div className="chat-conversation p-3 p-lg-4" style={{ height: 'calc(100vh - 140px)', overflowY: 'auto' }}>
           {loading ? (
             <div className="text-center p-4">Loading users...</div>
           ) : error && (!users || users.length === 0) ? (
             <div className="text-center text-danger p-4">{error}</div>
           ) : users && users.length > 0 ? (
-            <table className="table table-striped">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Phone No:</th>
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th>Department</th>
-                  <th>Date Created</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((u) => (
-                  <tr key={u.id}>
-                    <td>{(u.firstName || '') + (u.otherName ? ` ${u.otherName}` : '')}</td>
-                    <td>{u.phoneNumber ?? '—'}</td>
-                    <td>{u.email ?? '—'}</td>
-                    <td>{u.role ?? '—'}</td>
-                    <td>{u.department ?? '—'}</td>
-                    <td>{u.dateCreated ? formatDate(new Date(u.dateCreated)) : '—'}</td>
-                    <td>
-                      <button className="btn btn-sm btn-outline-secondary me-2" onClick={() => openEdit(u)}>Edit</button>
-                      <Link href={`/dashboard/users/${u.id}`} className="btn btn-sm btn-outline-primary">View</Link>
-                    </td>
+            <div className="table-responsive">
+              <table className="table table-striped">
+                <thead className="table-light sticky-top">
+                  <tr>
+                    <th>Name</th>
+                    <th>Phone No:</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Department</th>
+                    <th>Date Created</th>
+                    <th>Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {users.map((u) => (
+                    <tr key={u.id}>
+                      <td>{(u.firstName || '') + (u.otherName ? ` ${u.otherName}` : '')}</td>
+                      <td>{u.phoneNumber ?? '—'}</td>
+                      <td>{u.email ?? '—'}</td>
+                      <td>{u.role ?? '—'}</td>
+                      <td>{u.department ?? '—'}</td>
+                      <td>{u.dateCreated ? formatDate(new Date(u.dateCreated)) : '—'}</td>
+                      <td>
+                        <button className="btn btn-sm btn-outline-secondary me-2" onClick={() => openEdit(u)}>Edit</button>
+                        <Link href={`/dashboard/users/${u.id}`} className="btn btn-sm btn-outline-primary">View</Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <div className="p-4 text-center text-muted">No users found.</div>
           )}
         </div>
 
-        {/* Edit modal */}
+        {/* Edit modal - same as before */}
         {editingUser && (
-          <div className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style={{ zIndex: 1050, background: 'rgba(0,0,0,0.4)' }}>
-            <div className="bg-white rounded shadow" style={{ width: 540, maxWidth: '95%' }}>
-              <div className="p-3 border-bottom d-flex justify-content-between align-items-center">
-                <h5 className="mb-0">Edit user</h5>
-                <button className="btn-close" onClick={closeEdit} />
-              </div>
-              <div className="p-3">
-                {editError && <div className="alert alert-danger">{editError}</div>}
-                <div className="mb-3">
-                  <label className="form-label">Phone number</label>
-                  <input type="text" className="form-control" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
-                </div>
-                <div className="mb-3">
-                  <label className="form-label">Email</label>
-                  <input type="email" className="form-control" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} />
-                </div>
-                <div className="d-flex justify-content-end">
-                  <button className="btn btn-secondary me-2" onClick={closeEdit} disabled={editLoading}>Cancel</button>
-                  <button className="btn btn-primary" onClick={submitEdit} disabled={editLoading}>
-                    {editLoading ? 'Saving...' : 'Save changes'}
-                  </button>
+          <>
+            <div className="modal-backdrop fade show"></div>
+            <div className="modal fade show" style={{ display: 'block' }} tabIndex={-1} role="dialog">
+              <div className="modal-dialog" role="document">
+                <div className="modal-content">
+                  <div className="modal-header">
+                    <h5 className="modal-title">Edit user</h5>
+                    <button className="btn-close" onClick={closeEdit} />
+                  </div>
+                  <div className="modal-body">
+                    {editError && <div className="alert alert-danger">{editError}</div>}
+                    <div className="mb-3">
+                      <label className="form-label">Phone number</label>
+                      <input type="text" className="form-control" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
+                    </div>
+                    <div className="mb-3">
+                      <label className="form-label">Email</label>
+                      <input type="email" className="form-control" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="modal-footer">
+                    <button className="btn btn-secondary me-2" onClick={closeEdit} disabled={editLoading}>Cancel</button>
+                    <button className="btn btn-primary" onClick={submitEdit} disabled={editLoading}>
+                      {editLoading ? 'Saving...' : 'Save changes'}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          </>
         )}
       </div>
     </ProtectedRoute>

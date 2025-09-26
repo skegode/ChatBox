@@ -82,107 +82,113 @@ export default function CustomersPage() {
     load(p, q);
   };
 
-  return (
+    return (
     <ProtectedRoute requiredPermissions={['adminOnly']} requiredPolicy={PERMISSIONS.POLICY_VIEW_USERS}>
-      <div className="p-4 bg-white">
-        <div className="d-flex justify-content-between align-items-center">
-          <h4 className="mb-0 flex-grow-1"><i className="ri-group-line me-2" />Customers</h4>
-          <form onSubmit={onSearch}>
-            <div className="input-group">
-              <input type="text" className="form-control" value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Search by name, phone, email, IMEI..." />
-              <div className="input-group-append">
-                <button className="btn btn-primary" type="submit">Search</button>
+      <div className="w-100 overflow-hidden position-relative">
+        {/* Fixed Header */}
+        <div className="p-3 p-lg-4 border-bottom user-chat-topbar">
+          <div className="d-flex justify-content-between align-items-center">
+            <h4 className="mb-0 flex-grow-1"><i className="ri-group-line me-2" />Customers</h4>
+            <form onSubmit={onSearch} className="d-flex">
+              <div className="input-group">
+                <input type="text" className="form-control" value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Search by name, phone, email, IMEI..." />
+                <div className="input-group-append">
+                  <button className="btn btn-primary" type="submit">Search</button>
+                </div>
               </div>
-            </div>
-          </form>
-          <Link
-            href="/dashboard/prospects/customers"
-            className="btn btn-primary ms-2"
-          >
-            Refresh
-          </Link>
+            </form>
+            <Link
+              href="/dashboard/prospects/customers"
+              className="btn btn-primary ms-2"
+            >
+              Refresh
+            </Link>
+          </div>
         </div>
 
-        {loading ? (
-          <div className="pt-3 mt-3 border-top text-center p-4">Loading...</div>
-        ) : error ? (
-          <div className="pt-3 mt-3 border-top text-center p-4 text-danger">{error}</div>
-        ) : (
-          <>
-            <div className="pt-3 mt-3 border-top overflow-auto">
-              <table className="table table-respnsive table-striped">
-                <thead>
-                  <tr>
-                    <th>Id</th>
-                    <th>LeadId</th>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Phone</th>
-                    <th>Merchant</th>
-                    <th>Influencer</th>
-                    <th>DevicePrice</th>
-                    <th>FinancedAmount</th>
-                    <th>IMEI1</th>
-                    <th>IMEI2</th>
-                    <th>Color</th>
-                    <th>Memory</th>
-                    <th>PhoneState</th>
-                    <th>CreatedAt</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(!items || items.length === 0) ? (
+        {/* Scrollable Content */}
+        <div className="chat-conversation p-3 p-lg-4" style={{ height: 'calc(100vh - 140px)', overflowY: 'auto' }}>
+          {loading ? (
+            <div className="text-center p-4">Loading...</div>
+          ) : error ? (
+            <div className="text-center p-4 text-danger">{error}</div>
+          ) : (
+            <>
+              <div className="table-responsive">
+                <table className="table table-striped">
+                  <thead className="table-light sticky-top">
                     <tr>
-                      <td colSpan={14} className="text-center text-muted">No customers found</td>
+                      <th>Id</th>
+                      <th>LeadId</th>
+                      <th>Name</th>
+                      <th>Email</th>
+                      <th>Phone</th>
+                      <th>Merchant</th>
+                      <th>Influencer</th>
+                      <th>DevicePrice</th>
+                      <th>FinancedAmount</th>
+                      <th>IMEI1</th>
+                      <th>IMEI2</th>
+                      <th>Color</th>
+                      <th>Memory</th>
+                      <th>PhoneState</th>
+                      <th>CreatedAt</th>
                     </tr>
-                  ) : (
-                    items.map((it, idx) => (
-                      <tr key={it.id ?? idx}>
-                        <td>{it.id}</td>
-                        <td>{it.leadId ?? ''}</td>
-                        <td>{`${it.firstName ?? ''} ${it.otherName ?? ''}`.trim() || '—'}</td>
-                        <td>{it.email ?? '—'}</td>
-                        <td>{it.phone ?? '—'}</td>
-                        <td>{it.merchantName ?? ''}</td>
-                        <td>{it.influencerName ?? ''}</td>
-                        <td>{it.devicePrice ?? ''}</td>
-                        <td>{it.financedAmount ?? ''}</td>
-                        <td>{it.imei1 ?? '—'}</td>
-                        <td>{it.imei2 ?? '—'}</td>
-                        <td>{it.color ?? '—'}</td>
-                        <td>{it.memory ?? '—'}</td>
-                        <td>{it.phoneState ?? '—'}</td>
-                        <td>{it.createdAt ? new Date(it.createdAt).toLocaleString() : '—'}</td>
+                  </thead>
+                  <tbody>
+                    {(!items || items.length === 0) ? (
+                      <tr>
+                        <td colSpan={14} className="text-center text-muted">No customers found</td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="mt-3 d-flex justify-content-between align-items-center">
-              <div className="text-muted">Page: {page} | Total: {total}</div>
-              <div className="d-flex gap-2 align-items-center">
-                <button
-                  onClick={() => gotoPage(page - 1)}
-                  disabled={page <= 1}
-                  className="btn btn-sm btn-dark"
-                >
-                  Prev
-                </button>
-                <button
-                  onClick={() => gotoPage(page + 1)}
-                  disabled={page * pageSize >= total}
-                  className="btn btn-sm btn-dark"
-                >
-                  Next
-                </button>
+                    ) : (
+                      items.map((it, idx) => (
+                        <tr key={it.id ?? idx}>
+                          <td>{it.id}</td>
+                          <td>{it.leadId ?? ''}</td>
+                          <td>{`${it.firstName ?? ''} ${it.otherName ?? ''}`.trim() || '—'}</td>
+                          <td>{it.email ?? '—'}</td>
+                          <td>{it.phone ?? '—'}</td>
+                          <td>{it.merchantName ?? ''}</td>
+                          <td>{it.influencerName ?? ''}</td>
+                          <td>{it.devicePrice ?? ''}</td>
+                          <td>{it.financedAmount ?? ''}</td>
+                          <td>{it.imei1 ?? '—'}</td>
+                          <td>{it.imei2 ?? '—'}</td>
+                          <td>{it.color ?? '—'}</td>
+                          <td>{it.memory ?? '—'}</td>
+                          <td>{it.phoneState ?? '—'}</td>
+                          <td>{it.createdAt ? new Date(it.createdAt).toLocaleString() : '—'}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
-            </div>
-          </>
-        )}
+
+              <div className="mt-3 d-flex justify-content-between align-items-center">
+                <div className="text-muted">Page: {page} | Total: {total}</div>
+                <div className="d-flex gap-2 align-items-center">
+                  <button
+                    onClick={() => gotoPage(page - 1)}
+                    disabled={page <= 1}
+                    className="btn btn-sm btn-dark"
+                  >
+                    Prev
+                  </button>
+                  <button
+                    onClick={() => gotoPage(page + 1)}
+                    disabled={page * pageSize >= total}
+                    className="btn btn-sm btn-dark"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </ProtectedRoute>
   );

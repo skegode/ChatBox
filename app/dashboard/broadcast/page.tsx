@@ -5,6 +5,7 @@ import api from "@/lib/api";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { PERMISSIONS } from "@/lib/permissions";
 import { FaPaperclip, FaPaperPlane } from 'react-icons/fa';
+import ProtectedRoute from '../../../components/ProtectedRoute';
 
 type Contact = {
   id: string;
@@ -356,320 +357,308 @@ export default function BroadcastPage() {
   };
 
   return (
-    <div className="container-fluid">
-      <div className="row">
-        <div className="col-12">
-          <div className="page-title-box d-flex align-items-center justify-content-between mb-4">
-            <h4 className="mb-0 fw-bold">📢 Broadcast Message</h4>            
-          </div>
+    <ProtectedRoute requiredPermissions={['adminOnly']} requiredPolicy={PERMISSIONS.POLICY_ADMIN_ONLY}>
+      <div className="w-100 overflow-hidden position-relative">
+        {/* Fixed Header */}
+        <div className="p-3 p-lg-4 border-bottom user-chat-topbar">
+          <h4 className="mb-0"><i className="ri-broadcast-line me-2" />Broadcast Message</h4>
         </div>
-      </div>
 
-      {/* Success or Error messages */}
-      {error && (
-        <div className="row mb-3">
-          <div className="col-12">
-            <div className="alert alert-danger alert-dismissible fade show" role="alert">
+        {/* Scrollable Content */}
+        <div className="chat-conversation p-3 p-lg-4" style={{ height: 'calc(100vh - 140px)', overflowY: 'auto' }}>
+          {/* Success or Error messages */}
+          {error && (
+            <div className="alert alert-danger alert-dismissible fade show mb-3" role="alert">
               <i className="fas fa-exclamation-triangle me-2"></i>
               {error}
             </div>
-          </div>
-        </div>
-      )}
-      {success && (
-        <div className="row mb-3">
-          <div className="col-12">
-            <div className="alert alert-success alert-dismissible fade show" role="alert">
+          )}
+          {success && (
+            <div className="alert alert-success alert-dismissible fade show mb-3" role="alert">
               <i className="fas fa-check-circle me-2"></i>
               {success}
             </div>
-          </div>
-        </div>
-      )}
+          )}
 
-      <div className="row g-4">
-        {/* Recipients Selection Card */}
-        <div className="col-lg-5">
-          <div className="card h-100 shadow-sm">
-            <div className="card-header bg-primary text-white">
-              <div className="d-flex justify-content-between align-items-center">
-                <h6 className="mb-0">
-                  <i className="fas fa-users me-2"></i>
-                  Select Recipients
-                </h6>
-                <button
-                  type="button"
-                  className="btn btn-sm btn-light text-primary fw-semibold"
-                  onClick={() => setShowContactManager(true)}
-                >
-                  <i className="fas fa-cog me-1"></i>
-                  Manage ({selectedContacts.length})
-                </button>
-              </div>
-            </div>
-            <div className="card-body">
-              {/* Quick Add Contact */}
-              <div className="mb-4">
-                <label className="form-label fw-semibold">
-                  <i className="fas fa-plus-circle me-2 text-success"></i>
-                  Quick Add Phone Number
-                </label>
-                <div className="input-group">
-                  <span className="input-group-text">
-                    <i className="fab fa-whatsapp text-success"></i>
-                  </span>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={newContactId}
-                    onChange={(e) => setNewContactId(e.target.value)}
-                    placeholder="e.g. +254 712 345 678"
-                    onKeyPress={(e) => {
-                      if (e.key === "Enter") {
-                        addNewContact();
-                      }
-                    }}
-                  />
-                  <button
-                    className="btn btn-success"
-                    onClick={addNewContact}
-                    type="button"
-                  >
-                    <i className="fas fa-plus"></i>
-                  </button>
+          <div className="row g-4">
+            {/* Recipients Selection Card */}
+            <div className="col-lg-5">
+              <div className="card h-100 shadow-sm">
+                <div className="card-header bg-primary text-white">
+                  <div className="d-flex justify-content-between align-items-center">
+                    <h6 className="mb-0">
+                      <i className="fas fa-users me-2"></i>
+                      Select Recipients
+                    </h6>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-light text-primary fw-semibold"
+                      onClick={() => setShowContactManager(true)}
+                    >
+                      <i className="fas fa-cog me-1"></i>
+                      Manage ({selectedContacts.length})
+                    </button>
+                  </div>
                 </div>
-                <small className="text-muted mt-1 d-block">
-                  <i className="fas fa-info-circle me-1"></i>
-                  Enter number with country code (e.g. +254, +1, +44)
-                </small>
-              </div>
+                <div className="card-body">
+                  {/* Quick Add Contact */}
+                  <div className="mb-4">
+                    <label className="form-label fw-semibold">
+                      <i className="fas fa-plus-circle me-2 text-success"></i>
+                      Quick Add Phone Number
+                    </label>
+                    <div className="input-group">
+                      <span className="input-group-text">
+                        <i className="fab fa-whatsapp text-success"></i>
+                      </span>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={newContactId}
+                        onChange={(e) => setNewContactId(e.target.value)}
+                        placeholder="e.g. +254 712 345 678"
+                        onKeyPress={(e) => {
+                          if (e.key === "Enter") {
+                            addNewContact();
+                          }
+                        }}
+                      />
+                      <button
+                        className="btn btn-success"
+                        onClick={addNewContact}
+                        type="button"
+                      >
+                        <i className="fas fa-plus"></i>
+                      </button>
+                    </div>
+                    <small className="text-muted mt-1 d-block">
+                      <i className="fas fa-info-circle me-1"></i>
+                      Enter number with country code (e.g. +254, +1, +44)
+                    </small>
+                  </div>
 
-              {/* Available Contacts */}
-              <div className="mb-3">
-                <div className="d-flex justify-content-between align-items-center mb-3">
-                  <label className="form-label fw-semibold mb-0">
-                    <i className="fas fa-address-book me-2 text-info"></i>
-                    Your Contacts
-                  </label>
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-outline-info"
-                    onClick={selectAllContacts}
-                    disabled={loading}
-                  >
-                    <i className="fas fa-check-double me-1"></i>
-                    Select All
-                  </button>
-                </div>
-                
-                <div
-                  className="border rounded-3 p-3 bg-light"
-                  style={{ maxHeight: "350px", overflowY: "auto" }}
-                >
-                  {loading ? (
-                    <div className="text-center py-4">
-                      <div className="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
-                      <span className="text-muted">Loading contacts...</span>
+                  {/* Available Contacts */}
+                  <div className="mb-3">
+                    <div className="d-flex justify-content-between align-items-center mb-3">
+                      <label className="form-label fw-semibold mb-0">
+                        <i className="fas fa-address-book me-2 text-info"></i>
+                        Your Contacts
+                      </label>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-info"
+                        onClick={selectAllContacts}
+                        disabled={loading}
+                      >
+                        <i className="fas fa-check-double me-1"></i>
+                        Select All
+                      </button>
                     </div>
-                  ) : availableContacts.length === 0 ? (
-                    <div className="text-center py-4 text-muted">
-                      <i className="fas fa-user-slash fs-2 mb-2 d-block"></i>
-                      <p className="mb-0">No saved contacts found</p>
-                      <small>Add contacts using the form above</small>
-                    </div>
-                  ) : (
-                    <div className="row g-2">
-                      {availableContacts.map((contact, index) => {
-                        const isSelected = selectedContacts.some(
-                          (c) => c.id === contact.id
-                        );
-                        return (
-                          <div key={`available-${contact.id}-${index}`} className="col-12">
-                            <div className={`card border ${isSelected ? 'border-success bg-light' : 'border-light'} mb-1`}>
-                              <div className="card-body py-2 px-3">
-                                <div className="form-check mb-0">
-                                  <input
-                                    className="form-check-input"
-                                    type="checkbox"
-                                    id={`contact-${contact.id}-${index}`}
-                                    checked={isSelected}
-                                    onChange={(e) =>
-                                      handleSelectContact(contact, e.target.checked)
-                                    }
-                                  />
-                                  <label
-                                    className="form-check-label fw-medium"
-                                    htmlFor={`contact-${contact.id}-${index}`}
-                                  >
-                                    <div className="d-flex align-items-center">
-                                      <i className="fas fa-user-circle text-muted me-2"></i>
-                                      <div>
-                                        <div>{contact.name}</div>
-                                        {contact.name !== contact.id && (
-                                          <small className="text-muted">{contact.id}</small>
-                                        )}
-                                      </div>
+                    
+                    <div
+                      className="border rounded-3 p-3 bg-light"
+                      style={{ maxHeight: "350px", overflowY: "auto" }}
+                    >
+                      {loading ? (
+                        <div className="text-center py-4">
+                          <div className="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                          <span className="text-muted">Loading contacts...</span>
+                        </div>
+                      ) : availableContacts.length === 0 ? (
+                        <div className="text-center py-4 text-muted">
+                          <i className="fas fa-user-slash fs-2 mb-2 d-block"></i>
+                          <p className="mb-0">No saved contacts found</p>
+                          <small>Add contacts using the form above</small>
+                        </div>
+                      ) : (
+                        <div className="row g-2">
+                          {availableContacts.map((contact, index) => {
+                            const isSelected = selectedContacts.some(
+                              (c) => c.id === contact.id
+                            );
+                            return (
+                              <div key={`available-${contact.id}-${index}`} className="col-12">
+                                <div className={`card border ${isSelected ? 'border-success bg-light' : 'border-light'} mb-1`}>
+                                  <div className="card-body py-2 px-3">
+                                    <div className="form-check mb-0">
+                                      <input
+                                        className="form-check-input"
+                                        type="checkbox"
+                                        id={`contact-${contact.id}-${index}`}
+                                        checked={isSelected}
+                                        onChange={(e) =>
+                                          handleSelectContact(contact, e.target.checked)
+                                        }
+                                      />
+                                      <label
+                                        className="form-check-label fw-medium"
+                                        htmlFor={`contact-${contact.id}-${index}`}
+                                      >
+                                        <div className="d-flex align-items-center">
+                                          <i className="fas fa-user-circle text-muted me-2"></i>
+                                          <div>
+                                            <div>{contact.name}</div>
+                                            {contact.name !== contact.id && (
+                                              <small className="text-muted">{contact.id}</small>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </label>
                                     </div>
-                                  </label>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          </div>
-                        );
-                      })}
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Message Composition Card */}
-        <div className="col-lg-7">
-          <div className="card h-100 shadow-sm">
-            <div className="card-header bg-success text-white">
-              <h6 className="mb-0">
-                <i className="fas fa-edit me-2"></i>
-                Compose Broadcast Message
-              </h6>
-            </div>
-            <div className="card-body d-flex flex-column justify-content-center">
-              {/* Message Input Section - centered vertically in the card body */}
-              <div className="chat-input-wrapper border rounded-3 bg-white p-3 mx-auto" style={{ maxWidth: "90%" }}>
-                <MessageInput 
-                  onSend={handleSendBroadcast}                        
-                />
-                {sending && (
-                  <div className="text-center mt-3">
-                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                    <small className="text-muted">Sending broadcast to {selectedContacts.length} recipient{selectedContacts.length !== 1 ? 's' : ''}...</small>
                   </div>
-                )}
+                </div>
+              </div>
+            </div>
+
+            {/* Message Composition Card */}
+            <div className="col-lg-7">
+              <div className="card h-100 shadow-sm">
+                <div className="card-header bg-success text-white">
+                  <h6 className="mb-0">
+                    <i className="fas fa-edit me-2"></i>
+                    Compose Broadcast Message
+                  </h6>
+                </div>
+                <div className="card-body d-flex flex-column justify-content-center">
+                  {/* Message Input Section - centered vertically in the card body */}
+                  <div className="chat-input-wrapper border rounded-3 bg-white p-3 mx-auto" style={{ maxWidth: "90%" }}>
+                    <MessageInput 
+                      onSend={handleSendBroadcast}                        
+                    />
+                    {sending && (
+                      <div className="text-center mt-3">
+                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        <small className="text-muted">Sending broadcast to {selectedContacts.length} recipient{selectedContacts.length !== 1 ? 's' : ''}...</small>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
+
+        {/* Enhanced Contact Manager Modal - Fixed */}
+        {showContactManager && (
+          <>
+            <div className="modal-backdrop fade show"></div>
+            <div className="modal fade show" style={{ display: 'block' }} tabIndex={-1} role="dialog">
+              <div className="modal-dialog modal-lg modal-dialog-scrollable">
+                <div className="modal-content">
+                  <div className="modal-header bg-primary text-white">
+                    <h5 className="mb-0">
+                      <i className="fas fa-users-cog me-2"></i>
+                      Manage Recipients
+                    </h5>
+                    <button
+                      type="button"
+                      className="btn-close btn-close-white"
+                      onClick={() => setShowContactManager(false)}
+                    ></button>
+                  </div>
+
+                  <div className="modal-body">
+                    <div className="d-flex justify-content-between align-items-center mb-3">
+                      <h6 className="mb-0">
+                        <i className="fas fa-check-circle text-success me-2"></i>
+                        Selected Recipients ({selectedContacts.length})
+                      </h6>
+                      {selectedContacts.length > 0 && (
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-danger"
+                          onClick={removeAllContacts}
+                        >
+                          <i className="fas fa-trash me-1"></i>
+                          Clear All
+                        </button>
+                      )}
+                    </div>
+
+                    {selectedContacts.length === 0 ? (
+                      <div className="text-center py-5">
+                        <i className="fas fa-user-plus fs-1 text-muted mb-3 d-block"></i>
+                        <h6 className="text-muted">No recipients selected yet</h6>
+                        <p className="text-muted small mb-0">
+                          Select contacts from your contact list or add them manually
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="table-responsive">
+                        <table className="table table-hover align-middle">
+                          <thead className="table-light sticky-top">
+                            <tr>
+                              <th><i className="fas fa-user me-1"></i> Name</th>
+                              <th><i className="fas fa-phone me-1"></i> Contact ID</th>
+                              <th style={{ width: "100px" }}><i className="fas fa-cog me-1"></i> Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {selectedContacts.map((contact, index) => (
+                              <tr key={`manage-${contact.id}-${index}`}>
+                                <td>
+                                  <div className="d-flex align-items-center">
+                                    <i className="fas fa-user-circle text-muted me-2"></i>
+                                    <span className="fw-medium">{contact.name}</span>
+                                  </div>
+                                </td>
+                                <td>
+                                  <code className="text-muted">{contact.id}</code>
+                                </td>
+                                <td>
+                                  <button
+                                    className="btn btn-sm btn-outline-danger"
+                                    onClick={() =>
+                                      setSelectedContacts((prev) =>
+                                        prev.filter((c) => c.id !== contact.id)
+                                      )
+                                    }
+                                  >
+                                    <i className="fas fa-times"></i>
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="modal-footer">
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => setShowContactManager(false)}
+                    >
+                      <i className="fas fa-times me-1"></i>
+                      Close
+                    </button>
+                    {selectedContacts.length > 0 && (
+                      <button
+                        type="button"
+                        className="btn btn-primary ms-2"
+                        onClick={() => setShowContactManager(false)}
+                      >
+                        <i className="fas fa-check me-1"></i>
+                        Continue with {selectedContacts.length} Recipients
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
       </div>
-
-      {/* Enhanced Contact Manager Modal */}
-      {showContactManager && (
-        <div
-          className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
-          style={{ zIndex: 1055, backgroundColor: 'rgba(0,0,0,0.7)' }}
-        >
-          <div
-            className="bg-white rounded-4 shadow-lg"
-            style={{
-              width: "90%",
-              maxWidth: "700px",
-              maxHeight: "85vh",
-              overflowY: "auto",
-            }}
-          >
-            <div className="modal-header bg-primary text-white rounded-top-4 p-4">
-              <h5 className="mb-0">
-                <i className="fas fa-users-cog me-2"></i>
-                Manage Recipients
-              </h5>
-              <button
-                type="button"
-                className="btn-close btn-close-white"
-                onClick={() => setShowContactManager(false)}
-              ></button>
-            </div>
-
-            <div className="modal-body p-4">
-              <div className="d-flex justify-content-between align-items-center mb-3">
-                <h6 className="mb-0">
-                  <i className="fas fa-check-circle text-success me-2"></i>
-                  Selected Recipients ({selectedContacts.length})
-                </h6>
-                {selectedContacts.length > 0 && (
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-outline-danger"
-                    onClick={removeAllContacts}
-                  >
-                    <i className="fas fa-trash me-1"></i>
-                    Clear All
-                  </button>
-                )}
-              </div>
-
-              {selectedContacts.length === 0 ? (
-                <div className="text-center py-5">
-                  <i className="fas fa-user-plus fs-1 text-muted mb-3 d-block"></i>
-                  <h6 className="text-muted">No recipients selected yet</h6>
-                  <p className="text-muted small mb-0">
-                    Select contacts from your contact list or add them manually
-                  </p>
-                </div>
-              ) : (
-                <div className="table-responsive">
-                  <table className="table table-hover align-middle">
-                    <thead className="table-light">
-                      <tr>
-                        <th><i className="fas fa-user me-1"></i> Name</th>
-                        <th><i className="fas fa-phone me-1"></i> Contact ID</th>
-                        <th style={{ width: "100px" }}><i className="fas fa-cog me-1"></i> Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedContacts.map((contact, index) => (
-                        <tr key={`manage-${contact.id}-${index}`}>
-                          <td>
-                            <div className="d-flex align-items-center">
-                              <i className="fas fa-user-circle text-muted me-2"></i>
-                              <span className="fw-medium">{contact.name}</span>
-                            </div>
-                          </td>
-                          <td>
-                            <code className="text-muted">{contact.id}</code>
-                          </td>
-                          <td>
-                            <button
-                              className="btn btn-sm btn-outline-danger"
-                              onClick={() =>
-                                setSelectedContacts((prev) =>
-                                  prev.filter((c) => c.id !== contact.id)
-                                )
-                              }
-                            >
-                              <i className="fas fa-times"></i>
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            <div className="modal-footer border-top-0 p-4">
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setShowContactManager(false)}
-              >
-                <i className="fas fa-times me-1"></i>
-                Close
-              </button>
-              {selectedContacts.length > 0 && (
-                <button
-                  type="button"
-                  className="btn btn-primary ms-2"
-                  onClick={() => setShowContactManager(false)}
-                >
-                  <i className="fas fa-check me-1"></i>
-                  Continue with {selectedContacts.length} Recipients
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+    </ProtectedRoute>
   );
 }
