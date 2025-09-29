@@ -4,6 +4,10 @@ import api from "../../../lib/api";
 import { useAuth } from "../../../components/providers/AuthProvider";
 import { PERMISSIONS } from "../../../lib/permissions";
 import ProtectedRoute from '../../../components/ProtectedRoute';
+// @ts-expect-error - react-csv doesn't have official TypeScript definitions
+import { CSVLink } from "react-csv";
+import Papa from 'papaparse';
+
 
 // --- SVG Icon Components ---
 const PaperclipIcon = () => (
@@ -17,12 +21,20 @@ const PaperPlaneIcon = () => (
         <path d="M15.964.686a.5.5 0 0 0-.65-.65L.767 5.855H.766l-.452.18a.5.5 0 0 0-.082.887l.41.26.001.002 4.995 3.178 3.178 4.995.002.002.26.41a.5.5 0 0 0 .886-.083l6-15Zm-1.833 1.89L6.637 10.07l-4.99-3.176 14.13-6.393Z"/>
     </svg>
 );
+
+const CsvIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+        <path d="M4.5 2a.5.5 0 0 0-.5.5v11a.5.5 0 0 0 .5.5h7a.5.5 0 0 0 .5-.5v-11a.5.5 0 0 0-.5-.5h-7zm7 11.5a.5.5 0 0 1-.5.5h-7a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 .5.5v11z"/>
+        <path d="M6.354 9.854a.5.5 0 0 1-.708 0l-2-2a.5.5 0 0 1 0-.708l2-2a.5.5 0 0 1 .708.708L4.707 7.5l1.647 1.646a.5.5 0 0 1 0 .708zm3.292 0a.5.5 0 0 0 .708 0l2-2a.5.5 0 0 0 0-.708l-2-2a.5.5 0 0 0-.708.708L11.293 7.5 9.646 9.146a.5.5 0 0 0 0 .708z"/>
+    </svg>
+);
 // --- End SVG Icon Components ---
 
 type Contact = {
   id: string;
   name: string;
   waId?: string;
+  variables?: { [key: string]: string };
 };
 
 type ApiContact = {
@@ -41,10 +53,19 @@ type Conversation = {
 };
 
 type Template = {
+  id: number;
   name: string;
-  languageCode: string; // Updated from language_code
-  status: string;
-  components: string; // The backend sends this as a JSON string
+  languageCode: string;
+  category: string;
+  components: string;
+  variablesInfo?: string;
+};
+
+type TemplateVariable = {
+  component: string;
+  index: number;
+  placeholder: string;
+  example?: string;
 };
 
 type ParsedTemplateComponent = {
@@ -69,6 +90,11 @@ type CreateTemplateComponent = {
     header_text?: string[];
     body_text?: string[][];
   };
+};
+
+type TemplateRecipient = {
+  phoneNumber: string;
+  variables: string[];
 };
 
 type Language = {
@@ -133,23 +159,73 @@ function contactNameLooksLikePhone(candidate?: string, contactId?: string) {
   return a === b || a.endsWith(b) || b.endsWith(a);
 }
 
-function getNumBodyParams(template: Template | undefined): number {
-    if (!template) return 0;
-    try {
-        const components: ParsedTemplateComponent[] = JSON.parse(template.components);
-        const body = components.find(c => c.type.toUpperCase() === 'BODY');
-        if (!body || !body.text) return 0;
-        const matches = body.text.match(/{{\d+}}/g) || [];
-        const nums = matches.map(m => parseInt(m.replace(/{{|}}/g, '')));
-        return nums.length > 0 ? Math.max(...nums) : 0;
-    } catch (e) {
-        console.error("Failed to parse template components:", template.components, e);
-        return 0;
+// Helper function to parse template components and extract variables
+function parseTemplateVariables(template: Template): TemplateVariable[] {
+  if (!template || !template.components) return [];
+  
+  try {
+    // First check if variablesInfo is available from the updated backend
+    if (template.variablesInfo) {
+      const variables = JSON.parse(template.variablesInfo);
+      return Array.isArray(variables) ? variables : [];
     }
+    
+    // Fallback to parsing components
+    const components = JSON.parse(template.components);
+    const variables: TemplateVariable[] = [];
+    
+    components.forEach((component: ParsedTemplateComponent) => {
+      if (!component.type || !component.text) return;
+      
+      const componentType = component.type.toUpperCase();
+      const text = component.text;
+      
+      const matches = text.match(/{{\d+}}/g);
+      if (!matches) return;
+      
+      matches.forEach(match => {
+        const index = parseInt(match.replace(/{{|}}/g, ''));
+        variables.push({
+          component: componentType.toLowerCase(),
+          index: index,
+          placeholder: match
+        });
+      });
+    });
+    
+    return variables;
+  } catch (e) {
+    console.error("Failed to parse template variables:", e);
+    return [];
+  }
+}
+
+// Helper function to get template preview text with placeholders
+function getTemplatePreviewText(template: Template): { header?: string, body?: string, footer?: string } {
+  if (!template || !template.components) return {};
+  
+  try {
+    const components = JSON.parse(template.components);
+    const result: { header?: string, body?: string, footer?: string } = {};
+    
+    components.forEach((component: ParsedTemplateComponent) => {
+      if (!component.type || !component.text) return;
+      
+      const type = component.type.toLowerCase();
+      if (type === 'header') result.header = component.text;
+      else if (type === 'body') result.body = component.text;
+      else if (type === 'footer') result.footer = component.text;
+    });
+    
+    return result;
+  } catch (e) {
+    console.error("Failed to get template preview text:", e);
+    return {};
+  }
 }
 
 function RegularMessageInput({ onSend }: { onSend: (text: string, file?: File | null) => Promise<boolean> }) {
-    const [text, setText] = useState("");
+  const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -218,65 +294,202 @@ function RegularMessageInput({ onSend }: { onSend: (text: string, file?: File | 
   );
 }
 
-function TemplateMessageInput({ templates, onSend, onCreateTemplate, onSyncTemplates }: { templates: Template[]; onSend: (templateName: string, languageCode: string, components: TemplateComponent[]) => Promise<boolean>; onCreateTemplate: () => void; onSyncTemplates: () => void }) {
+// Add proper CSV data types
+type CsvDataRow = {
+  phoneNumber: string;
+  [key: string]: string; // for variable_1, variable_2, etc.
+};
+
+type CsvTemplateData = (string | CsvDataRow)[][]; // Changed to be array of arrays
+
+
+function TemplateMessageInput({ 
+  templates, 
+  contacts, 
+  onSend, 
+  onCreateTemplate, 
+  onSyncTemplates 
+}: {   
+   templates: Template[]; 
+  contacts: Contact[];
+  onSend: (templateName: string, languageCode: string, recipients: TemplateRecipient[]) => Promise<boolean>;
+  onCreateTemplate: () => void; 
+  onSyncTemplates: () => void 
+}) {
+
   const [templateName, setTemplateName] = useState("");
   const [languageCode, setLanguageCode] = useState("");
-  const [paramValues, setParamValues] = useState<string[]>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  const [showPersonalization, setShowPersonalization] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [csvData, setCsvData] = useState<CsvTemplateData>([]);
+  const [showCsvUpload, setShowCsvUpload] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+ 
 
+  // Get unique template names for dropdown
   const uniqueTemplateNames = [...new Set(templates.map(t => t.name))];
 
+  // Get available language codes for the selected template name
   const availableLanguages = templates
     .filter(t => t.name === templateName)
-    .map(t => ({ code: t.languageCode, status: t.status }));
+    .map(t => ({ code: t.languageCode, status: 'APPROVED' }));
 
+  // Get variables for the selected template
+  const templateVariables = selectedTemplate ? parseTemplateVariables(selectedTemplate) : [];
+  const templatePreview = selectedTemplate ? getTemplatePreviewText(selectedTemplate) : {};
+
+  // Effect to handle template and language selection
   useEffect(() => {
     if (availableLanguages.length > 0 && !languageCode) {
-      const approved = availableLanguages.find(l => l.status === 'APPROVED');
-      setLanguageCode(approved ? approved.code : availableLanguages[0]?.code || "");
+      setLanguageCode(availableLanguages[0]?.code || "");
+    } else if (availableLanguages.length === 0) {
+      setLanguageCode("");
     }
-  }, [templateName, availableLanguages, languageCode]);
+  }, [templateName, availableLanguages]);
 
+  // Effect to handle selected template changes
   useEffect(() => {
-    if (languageCode) {
-      const selectedTemp = templates.find(t => t.name === templateName && t.languageCode === languageCode);
-      const numParams = getNumBodyParams(selectedTemp);
-      setParamValues(Array(numParams).fill(''));
+    if (templateName && languageCode) {
+      const template = templates.find(
+        t => t.name === templateName && t.languageCode === languageCode
+      );
+      
+      if (template) {
+        setSelectedTemplate(template);
+      } else {
+        setSelectedTemplate(null);
+      }
     }
   }, [languageCode, templateName, templates]);
 
-  const updateParam = (index: number, value: string) => {
-    const newParams = [...paramValues];
-    newParams[index] = value;
-    setParamValues(newParams);
+    // Generate CSV template when template changes
+  useEffect(() => {
+    if (selectedTemplate && templateVariables.length > 0) {
+      // Create CSV headers with variable names
+      const headers = ['phoneNumber'];
+      
+      // Sort variables by index and add them as headers
+      templateVariables
+        .sort((a, b) => a.index - b.index)
+        .forEach(v => {
+          headers.push(`variable_${v.index}`);
+        });
+      
+          // Generate sample data with phone number and empty variables
+      const sampleData: (string | CsvDataRow)[] = headers.map(() => '');
+      sampleData[0] = "+1234567890";
+      
+      // Set CSV data as array of arrays for CSVLink compatibility
+      setCsvData([headers, sampleData as string[]]);
+    }
+  }, [selectedTemplate, templateVariables]);
+
+
+  // Handle sending the template to all recipients
+  const handleSend = async () => {
+    if (!selectedTemplate || !languageCode) return false;
+    
+    // Convert contacts to recipients with personalized variables
+    const recipients: TemplateRecipient[] = contacts.map(contact => {
+      // Get variables for this contact, or use empty strings
+      const variables = templateVariables.map(v => {
+        return contact.variables?.[`var_${v.index}`] || '';
+      });
+      
+      return {
+        phoneNumber: contact.id.replace(/^\+/, ""),
+        variables
+      };
+    });
+    
+    return await onSend(templateName, languageCode, recipients);
   };
 
-    const handleSend = async () => {
-    const components: TemplateComponent[] = [
-      {
-        type: "body",
-        parameters: paramValues.map(text => ({ type: "text", text }))
-      }
-    ];
-    
-    const success = await onSend(templateName, languageCode, components);
-    if (success) {
-      setTemplateName("");
-      setLanguageCode("");
-      setParamValues([]);
+  const handleUploadClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
     }
-    return success;
+  };
+
+    const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    Papa.parse<CsvDataRow>(file, {
+      header: true,
+      complete: (results) => {
+        // Process the parsed data
+        if (results.data && Array.isArray(results.data) && results.data.length > 0) {
+          processCsvData(results.data);
+        }
+      },
+      error: (error) => {
+        console.error("Error parsing CSV:", error);
+      }
+    });
+  };
+
+  const processCsvData = (data: CsvDataRow[]) => {
+    // Map CSV data to contacts with variables
+    const updatedContacts = [...contacts];    
+    
+     data.forEach((row) => {
+      const phoneNumber = row.phoneNumber;
+      if (!phoneNumber) return;
+      
+      // Find matching contact
+      const contactIndex = updatedContacts.findIndex(c => 
+        c.id === phoneNumber || c.id === `+${phoneNumber}`
+      );
+      
+      if (contactIndex >= 0) {
+        // Initialize variables object if needed
+        if (!updatedContacts[contactIndex].variables) {
+          updatedContacts[contactIndex].variables = {};
+        }
+        
+             // Map all variable fields from CSV
+        Object.keys(row).forEach(key => {
+          if (key.startsWith('variable_')) {
+            const varIndex = key.split('_')[1];
+            if (varIndex) {
+              updatedContacts[contactIndex].variables![`var_${varIndex}`] = row[key];
+            }
+          }
+        });
+      }
+    });
+    
+    // Update the contacts state in parent component
+    // This requires adding a callback from parent component
+    setShowCsvUpload(false);
+  };
+
+  // Prepare variables for preview display
+  const getPreviewText = (text?: string, contactVars?: { [key: string]: string }): string => {
+    if (!text) return '';
+    
+    let previewText = text;
+    templateVariables.forEach((v) => {
+      const placeholder = v.placeholder;
+      const replacement = contactVars ? (contactVars[`var_${v.index}`] || `<${v.index}>`) : `<${v.index}>`;
+      previewText = previewText.replace(placeholder, replacement);
+    });
+    
+    return previewText;
   };
 
   return (
-    <div className="d-flex flex-column gap-2">
-      <div className="d-flex justify-content-between">
+    <div className="d-flex flex-column gap-3">
+      <div className="d-flex justify-content-between align-items-center">
         <select
           className="form-select me-2"
           value={templateName}
           onChange={(e) => {
             setTemplateName(e.target.value);
             setLanguageCode("");
-            setParamValues([]);
+            setShowPersonalization(false);
           }}
         >
           <option value="">Select Template</option>
@@ -285,15 +498,21 @@ function TemplateMessageInput({ templates, onSend, onCreateTemplate, onSyncTempl
           ))}
         </select>
         <div className="d-flex gap-1">
-          <button className="btn btn-sm btn-outline-info" onClick={onSyncTemplates}>
+          <button 
+            className="btn btn-sm btn-outline-info" 
+            onClick={onSyncTemplates}
+            disabled={loading}
+          >
             <i className="fas fa-sync me-1"></i>
             Sync
           </button>
           <button className="btn btn-sm btn-outline-primary" onClick={onCreateTemplate}>
-            Create New
+            <i className="fas fa-plus me-1"></i>
+            Create
           </button>
         </div>
       </div>
+
       {templateName && (
         <select
           className="form-select"
@@ -303,26 +522,234 @@ function TemplateMessageInput({ templates, onSend, onCreateTemplate, onSyncTempl
           <option value="">Select Language</option>
           {availableLanguages.map(lang => (
             <option key={lang.code} value={lang.code}>
-              {lang.code} ({lang.status})
+              {supportedLanguages.find(l => l.code === lang.code)?.name || lang.code}
             </option>
           ))}
         </select>
       )}
-      {paramValues.map((val, index) => (
-        <input
-          key={index}
-          type="text"
-          className="form-control"
-          placeholder={`Parameter {{${index + 1}}}`}
-          value={val}
-          onChange={(e) => updateParam(index, e.target.value)}
-        />
-      ))}
-      <div className="d-flex justify-content-end">
+
+      {selectedTemplate && (
+        <div className="template-preview border rounded p-3 mb-3 bg-light">
+          <h6 className="border-bottom pb-2 mb-3">Template Preview</h6>
+          
+          {templatePreview.header && (
+            <div className="mb-2">
+              <small className="text-muted">HEADER</small>
+              <div className="fw-bold">{getPreviewText(templatePreview.header)}</div>
+            </div>
+          )}
+          
+          {templatePreview.body && (
+            <div className="mb-2">
+              <small className="text-muted">BODY</small>
+              <div>{getPreviewText(templatePreview.body)}</div>
+            </div>
+          )}
+          
+          {templatePreview.footer && (
+            <div>
+              <small className="text-muted">FOOTER</small>
+              <div className="text-muted font-italic">{templatePreview.footer}</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {selectedTemplate && templateVariables.length > 0 && (
+        <>
+          <div className="d-flex justify-content-between align-items-center">
+            <h6 className="mb-0">Personalization</h6>
+            <div className="d-flex gap-2">
+              {csvData.length > 0 && (
+                <CSVLink 
+                  data={csvData} 
+                  filename={`${templateName}_template.csv`}
+                  className="btn btn-sm btn-outline-secondary"
+                >
+                  <CsvIcon /> Download Template
+                </CSVLink>
+              )}
+              <button 
+                className="btn btn-sm btn-outline-primary"
+                onClick={() => setShowCsvUpload(true)}
+              >
+                <i className="fas fa-upload me-1"></i> Import CSV
+              </button>
+              <button
+                className="btn btn-sm btn-outline-info"
+                onClick={() => setShowPersonalization(!showPersonalization)}
+              >
+                {showPersonalization ? (
+                  <><i className="fas fa-eye-slash me-1"></i> Hide Variables</>
+                ) : (
+                  <><i className="fas fa-eye me-1"></i> Show Variables</>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {showPersonalization && (
+            <div className="mt-3 border rounded p-3">
+              <h6 className="border-bottom pb-2 mb-3">Customize Variables for Each Contact</h6>
+              
+              {contacts.length > 0 ? (
+                <div className="table-responsive">
+                  <table className="table table-bordered table-sm">
+                    <thead className="table-light">
+                      <tr>
+                        <th>Contact</th>
+                        {templateVariables
+                          .sort((a, b) => a.index - b.index)
+                          .map((v) => (
+                            <th key={`header-var-${v.index}`}>Variable {v.index}</th>
+                          ))}
+                        <th>Preview</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {contacts.map((contact, idx) => (
+                        <tr key={`contact-row-${contact.id}-${idx}`}>
+                          <td>
+                            <div className="d-flex align-items-center">
+                              <i className="fas fa-user-circle text-muted me-2"></i>
+                              <div>
+                                <div className="fw-medium">{contact.name}</div>
+                                <small className="text-muted">{contact.id}</small>
+                              </div>
+                            </div>
+                          </td>
+                          {templateVariables
+                            .sort((a, b) => a.index - b.index)
+                            .map((v) => (
+                              <td key={`var-${contact.id}-${v.index}`}>
+                                <input
+                                  type="text"
+                                  className="form-control form-control-sm"
+                                  placeholder={`Variable ${v.index}`}
+                                  value={contact.variables?.[`var_${v.index}`] || ''}
+                                  onChange={(e) => {
+                                    // Update the contact's variables
+                                    const updatedContacts = [...contacts];
+                                    const contactIndex = updatedContacts.findIndex(c => c.id === contact.id);
+                                    
+                                    if (contactIndex >= 0) {
+                                      if (!updatedContacts[contactIndex].variables) {
+                                        updatedContacts[contactIndex].variables = {};
+                                      }
+                                      
+                                      updatedContacts[contactIndex].variables![`var_${v.index}`] = e.target.value;
+                                      // You need to pass this updated contacts array back to parent component
+                                    }
+                                  }}
+                                />
+                              </td>
+                            ))}
+                          <td>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-info"
+                              data-bs-toggle="tooltip"
+                              data-bs-placement="top"
+                              title="View personalized preview"
+                            >
+                              <i className="fas fa-eye"></i>
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="alert alert-info">
+                  No contacts selected. Please select contacts to personalize variables.
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Hidden file input for CSV upload */}
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        className="d-none" 
+        accept=".csv" 
+        onChange={handleFileUpload} 
+      />
+
+      {/* CSV Upload Modal */}
+      {showCsvUpload && (
+        <>
+          <div className="modal-backdrop fade show"></div>
+          <div className="modal fade show" style={{ display: 'block' }} tabIndex={-1}>
+            <div className="modal-dialog">
+              <div className="modal-content">
+                <div className="modal-header">
+                  <h5 className="modal-title">Import Variables from CSV</h5>
+                  <button type="button" className="btn-close" onClick={() => setShowCsvUpload(false)}></button>
+                </div>
+                <div className="modal-body">
+                  <p>Upload a CSV file with variables for each contact. The CSV should have:</p>
+                  <ul>
+                    <li>A <code>phoneNumber</code> column with contact phone numbers</li>
+                    <li>Columns named <code>variable_1</code>, <code>variable_2</code>, etc. for each template variable</li>
+                  </ul>
+                  
+                  <div className="mb-3">
+                    <label className="form-label">Upload CSV File</label>
+                    <input 
+                      type="file"
+                      className="form-control"
+                      accept=".csv"
+                      onChange={handleFileUpload}
+                    />
+                  </div>
+                  
+                  <div className="d-grid gap-2">
+                    <button 
+                      className="btn btn-primary" 
+                      onClick={handleUploadClick}
+                    >
+                      <i className="fas fa-upload me-2"></i>
+                      Upload and Process
+                    </button>
+                  </div>
+                  
+                  <hr />
+                  
+                  <div className="d-grid">
+                    <CSVLink 
+                      data={csvData} 
+                      filename={`${templateName}_template.csv`}
+                      className="btn btn-outline-secondary"
+                    >
+                      <i className="fas fa-download me-2"></i>
+                      Download Template CSV
+                    </CSVLink>
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowCsvUpload(false)}>
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      <div className="d-flex justify-content-end mt-2">
         <button
           className="btn btn-primary"
           onClick={handleSend}
-          disabled={!templateName || !languageCode || paramValues.some(v => v === '')}
+          disabled={
+            !templateName || 
+            !languageCode || 
+            !selectedTemplate
+          }
         >
           <PaperPlaneIcon />
         </button>
@@ -350,7 +777,9 @@ function CreateTemplateModal({ show, onClose, onCreate }: { show: boolean; onClo
     }
 
     const matches = bodyText.match(/{{\d+}}/g) || [];
-    const numParams = matches.length > 0 ? Math.max(...matches.map(m => parseInt(m.replace(/{{|}}/g, "")))) : 0;
+    const varIndices = matches.map(m => parseInt(m.replace(/{{|}}/g, "")));
+    const numParams = varIndices.length > 0 ? Math.max(...varIndices) : 0;
+    
     setBodyExamples(prev => {
       const newEx = Array(numParams).fill("");
       for (let i = 0; i < Math.min(prev.length, numParams); i++) {
@@ -441,7 +870,13 @@ function CreateTemplateModal({ show, onClose, onCreate }: { show: boolean; onClo
               {error && <div className="alert alert-danger">{error}</div>}
               <div className="mb-3">
                 <label className="form-label">Name (lowercase letters, numbers, underscores only)</label>
-                <input type="text" className="form-control" value={name} onChange={e => setName(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))} />
+                <input 
+                  type="text" 
+                  className="form-control" 
+                  value={name} 
+                  onChange={e => setName(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                />
+                <small className="text-muted">Template name must be unique and follow WhatsApp's naming conventions</small>
               </div>
               <div className="mb-3">
                 <label className="form-label">Language</label>
@@ -460,33 +895,63 @@ function CreateTemplateModal({ show, onClose, onCreate }: { show: boolean; onClo
                     <option key={cat} value={cat}>{cat}</option>
                   ))}
                 </select>
+                <small className="text-muted">
+                  AUTHENTICATION: For OTP codes and verification<br />
+                  MARKETING: For promotional content<br />
+                  UTILITY: For transactional updates, confirmations, etc.
+                </small>
               </div>              
               <div className="mb-3">
                 <label className="form-label">Header Text (optional, use {`{{1}}`} for variable)</label>
                 <input type="text" className="form-control" value={headerText} onChange={e => setHeaderText(e.target.value)} />
                 {/{{1}}/.test(headerText) && (
-                  <input type="text" className="form-control mt-2" placeholder={`Example for {{1}}`} value={headerExample} onChange={e => setHeaderExample(e.target.value)} />
+                  <div className="mt-2">
+                    <label className="form-label text-muted small">Example for header variable</label>
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      placeholder="Example value for {{1}}" 
+                      value={headerExample} 
+                      onChange={e => setHeaderExample(e.target.value)} 
+                    />
+                  </div>
                 )}
               </div>
               <div className="mb-3">
                 <label className="form-label">Body Text (use {`{{1}}`}, {`{{2}}`}, etc. for variables)</label>
-                <textarea className="form-control" value={bodyText} onChange={e => setBodyText(e.target.value)} />
+                <textarea className="form-control" rows={3} value={bodyText} onChange={e => setBodyText(e.target.value)} />
+                <small className="text-muted">This is the main content of your template message</small>
                 {bodyExamples.map((ex, i) => (
-                  <input key={i} type="text" className="form-control mt-2" placeholder={`Example for {{${i+1}}}`} value={ex} onChange={e => {
-                    const newEx = [...bodyExamples];
-                    newEx[i] = e.target.value;
-                    setBodyExamples(newEx);
-                  }} />
+                  <div className="mt-2" key={`body-ex-${i+1}`}>                    
+                    <label className="form-label text-muted small">Example for variable {`{{${i+1}}}`}</label>
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      placeholder={`Example value for {{${i+1}}}`} 
+                      value={ex} 
+                      onChange={e => {
+                        const newEx = [...bodyExamples];
+                        newEx[i] = e.target.value;
+                        setBodyExamples(newEx);
+                      }} 
+                    />
+                  </div>
                 ))}
               </div>
               <div className="mb-3">
                 <label className="form-label">Footer Text (optional, no variables)</label>
                 <input type="text" className="form-control" value={footerText} onChange={e => setFooterText(e.target.value)} />
+                <small className="text-muted">Fixed text that appears at the bottom of your message</small>
               </div>
             </div>
             <div className="modal-footer">
               <button type="button" className="btn btn-secondary" onClick={onClose}>Close</button>
-              <button type="button" className="btn btn-primary" onClick={handleSubmit} disabled={loading}>
+              <button 
+                type="button" 
+                className="btn btn-primary" 
+                onClick={handleSubmit} 
+                disabled={loading || !name || !languageCode || !category || !bodyText}
+              >
                 {loading ? 'Creating...' : 'Create'}
               </button>
             </div>
@@ -501,6 +966,7 @@ export default function BroadcastPage() {
   const [selectedContacts, setSelectedContacts] = useState<Contact[]>([]);
   const [availableContacts, setAvailableContacts] = useState<Contact[]>([]);
   const [newContactId, setNewContactId] = useState("");
+  const [newContactName, setNewContactName] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -509,12 +975,14 @@ export default function BroadcastPage() {
   const [isTemplateMode, setIsTemplateMode] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [showBulkImportModal, setShowBulkImportModal] = useState(false);
+  const [bulkImportText, setBulkImportText] = useState("");
   const { isAuthenticated } = useAuth();
 
   useEffect(() => {
     if (isAuthenticated) {
-        fetchContacts();
-        fetchTemplates();
+      fetchContacts();
+      fetchTemplates();
     }
   }, [isAuthenticated]);
 
@@ -538,6 +1006,7 @@ export default function BroadcastPage() {
           uniqueContacts.set(contactId, {
             id: contactId.startsWith("+") ? contactId : `+${contactId}`,
             name: displayName,
+            variables: {}
           });
         });
         setAvailableContacts(Array.from(uniqueContacts.values()));
@@ -593,14 +1062,28 @@ export default function BroadcastPage() {
       return;
     }
 
-    setSelectedContacts([ ...selectedContacts, { id: formattedId, name: formattedId }]);
+    setSelectedContacts([
+      ...selectedContacts,
+      {
+        id: formattedId,
+        name: newContactName.trim() || formattedId,
+        variables: {}
+      }
+    ]);
+    
     setNewContactId("");
+    setNewContactName("");
     setError(null);
   };
 
   const handleSelectContact = (contact: Contact, selected: boolean) => {
     if (selected) {
-      setSelectedContacts((prev) => [...prev, contact]);
+      // Copy contact but make sure it has a variables object
+      const contactWithVars = {
+        ...contact,
+        variables: contact.variables || {}
+      };
+      setSelectedContacts((prev) => [...prev, contactWithVars]);
     } else {
       setSelectedContacts((prev) => prev.filter((c) => c.id !== contact.id));
     }
@@ -608,119 +1091,212 @@ export default function BroadcastPage() {
 
   const removeAllContacts = () => {
     if (selectedContacts.length > 0) {
-        setSelectedContacts([]);
+      setSelectedContacts([]);
     }
   };
 
   const selectAllContacts = () => {
-    const notYetSelected = availableContacts.filter(
-      (contact) => !selectedContacts.some((selected) => selected.id === contact.id)
-    );
+    const notYetSelected = availableContacts
+      .filter((contact) => !selectedContacts.some((selected) => selected.id === contact.id))
+      .map(contact => ({
+        ...contact,
+        variables: contact.variables || {}
+      }));
+      
     setSelectedContacts([...selectedContacts, ...notYetSelected]);
   };
 
-  const handleSendRegularMessage = async (text: string, file?: File | null): Promise<boolean> => {
-      if (selectedContacts.length === 0) {
-          setError("Please select at least one contact");
-          return false;
+  const processBulkImport = () => {
+    if (!bulkImportText.trim()) {
+      setError("Please enter contact information");
+      return;
+    }
+    
+    const lines = bulkImportText.trim().split('\n');
+    const newContacts: Contact[] = [];
+    const errors: string[] = [];
+    
+    lines.forEach((line, index) => {
+      const parts = line.split(',').map(p => p.trim());
+      
+      if (parts.length < 1) {
+        errors.push(`Line ${index + 1}: Invalid format`);
+        return;
       }
-      if (!text && !file) {
-          setError("Please enter a message or select a file");
-          return false;
+      
+      const phoneNumber = parts[0];
+      const name = parts.length > 1 ? parts[1] : phoneNumber;
+      
+      if (!phoneNumber || !isValidWhatsAppNumber(phoneNumber)) {
+        errors.push(`Line ${index + 1}: Invalid phone number ${phoneNumber}`);
+        return;
       }
-  
-      setSending(true);
-      setError(null);
-      setSuccess(null);
-  
-      try {
-          let mediaId = null;
-          let mediaType = null;
-          let mediaLocalPath = null;
-          let mediaFileName = null;
-  
-          if (file) {
-              const fd = new FormData();
-              fd.append("file", file);
-              const mediaResp = await api.post("/api/Messages/media", fd);
-              const mediaMeta = mediaResp?.data;
-              if (mediaMeta) {
-                  mediaId = mediaMeta.mediaId;
-                  mediaType = mediaMeta.mediaType;
-                  mediaLocalPath = mediaMeta.mediaLocalPath;
-                  mediaFileName = mediaMeta.fileName;
-              }
-          }
-  
-          const results = await Promise.allSettled(
-              selectedContacts.map((contact) => {
-                  const payload = {
-                      ContactId: contact.id.replace(/^\+/, ""),
-                      MessageText: text,
-                      MediaId: mediaId,
-                      MediaType: mediaType,
-                      MediaLocalPath: mediaLocalPath,
-                      MediaFileName: mediaFileName,
-                  };
-                  return api.post("/api/Messages/send", payload);
-              })
-          );
-  
-          const successful = results.filter((r) => r.status === "fulfilled").length;
-          const failed = results.filter((r) => r.status === "rejected").length;
-  
-          setSuccess(`Successfully sent to ${successful} contacts${failed > 0 ? ` (${failed} failed)` : ""}`);
-          if (failed === 0) {
-              setSelectedContacts([]);
-          }
-          return failed === 0;
-      } catch (err) {
-          console.error("Error sending regular broadcast:", err);
-          setError("Failed to send broadcast message");
-          return false;
-      } finally {
-          setSending(false);
+      
+      const formattedNumber = formatWhatsAppNumber(phoneNumber);
+      
+      // Check if already in selected contacts
+      if (selectedContacts.some(c => c.id === formattedNumber)) {
+        errors.push(`Line ${index + 1}: ${formattedNumber} already added`);
+        return;
       }
+      
+      // Check if already processed in this batch
+      if (newContacts.some(c => c.id === formattedNumber)) {
+        errors.push(`Line ${index + 1}: ${formattedNumber} duplicate in import`);
+        return;
+      }
+      
+      // Add to new contacts
+      newContacts.push({
+        id: formattedNumber,
+        name: name,
+        variables: {}
+      });
+    });
+    
+    if (errors.length > 0) {
+      setError(`Import had errors:\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? `\n...and ${errors.length - 5} more` : ''}`);
+    } else {
+      setSelectedContacts([...selectedContacts, ...newContacts]);
+      setShowBulkImportModal(false);
+      setBulkImportText("");
+      setSuccess(`Successfully imported ${newContacts.length} contacts`);
+    }
   };
-  
-  const handleSendTemplateMessage = async (templateName: string, languageCode: string, components: TemplateComponent[]): Promise<boolean> => {
-      if (selectedContacts.length === 0) {
-          setError("Please select at least one contact");
-          return false;
+
+  const handleSendRegularMessage = async (text: string, file?: File | null): Promise<boolean> => {
+    if (selectedContacts.length === 0) {
+      setError("Please select at least one contact");
+      return false;
+    }
+    if (!text && !file) {
+      setError("Please enter a message or select a file");
+      return false;
+    }
+
+    setSending(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      let mediaId = null;
+      let mediaType = null;
+      let mediaLocalPath = null;
+      let mediaFileName = null;
+
+      if (file) {
+        const fd = new FormData();
+        fd.append("file", file);
+        const mediaResp = await api.post("/api/Messages/media", fd);
+        const mediaMeta = mediaResp?.data;
+        if (mediaMeta) {
+          mediaId = mediaMeta.mediaId;
+          mediaType = mediaMeta.mediaType;
+          mediaLocalPath = mediaMeta.mediaLocalPath;
+          mediaFileName = mediaMeta.fileName;
+        }
       }
-  
-      setSending(true);
-      setError(null);
-      setSuccess(null);
-  
-      try {
-          const results = await Promise.allSettled(
-              selectedContacts.map((contact) => {
-                  const payload = {
-                      ContactId: contact.id.replace(/^\+/, ""),
-                      TemplateName: templateName,
-                      LanguageCode: languageCode,
-                      Components: components,
-                  };
-                  return api.post("/api/Messages/send-template", payload);
-              })
-          );
-  
-          const successful = results.filter((r) => r.status === "fulfilled").length;
-          const failed = results.filter((r) => r.status === "rejected").length;
-  
-          setSuccess(`Template sent to ${successful} contacts${failed > 0 ? ` (${failed} failed)` : ""}`);
-          if (failed === 0) {
-              setSelectedContacts([]);
-          }
-          return failed === 0;
-      } catch (err) {
-          console.error("Error sending template broadcast:", err);
-          setError("Failed to send template message");
-          return false;
-      } finally {
-          setSending(false);
+
+      const results = await Promise.allSettled(
+        selectedContacts.map((contact) => {
+          const payload = {
+            ContactId: contact.id.replace(/^\+/, ""),
+            MessageText: text,
+            MediaId: mediaId,
+            MediaType: mediaType,
+            MediaLocalPath: mediaLocalPath,
+            MediaFileName: mediaFileName,
+          };
+          return api.post("/api/Messages/send", payload);
+        })
+      );
+
+      const successful = results.filter((r) => r.status === "fulfilled").length;
+      const failed = results.filter((r) => r.status === "rejected").length;
+
+      setSuccess(`Successfully sent to ${successful} contacts${failed > 0 ? ` (${failed} failed)` : ""}`);
+      if (failed === 0) {
+        setSelectedContacts([]);
       }
+      return failed === 0;
+    } catch (err) {
+      console.error("Error sending regular broadcast:", err);
+      setError("Failed to send broadcast message");
+      return false;
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleSendTemplateMessage = async (
+    templateName: string,
+    languageCode: string,
+    recipients: TemplateRecipient[]
+  ): Promise<boolean> => {
+    if (selectedContacts.length === 0) {
+      setError("Please select at least one contact");
+      return false;
+    }
+
+    setSending(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      // Use new broadcast-template endpoint
+      const response = await api.post("/api/Messages/broadcast-template", {
+        templateName,
+        languageCode,
+        recipients: selectedContacts.map(contact => {
+          // Find the template we're using
+          const template = templates.find(t => t.name === templateName && t.languageCode === languageCode);
+          const templateVars = template ? parseTemplateVariables(template) : [];
+          
+          // Extract variables in correct order
+          const variables = templateVars
+            .sort((a, b) => a.index - b.index)
+            .map(v => contact.variables?.[`var_${v.index}`] || '');
+          
+          return {
+            phoneNumber: contact.id.replace(/^\+/, ""),
+            variables
+          };
+        })
+      });
+
+      const successful = response.data.successful || 0;
+      const failed = response.data.failed || 0;
+
+      setSuccess(`Template sent to ${successful} contacts${failed > 0 ? ` (${failed} failed)` : ""}`);
+      if (failed === 0) {
+        setSelectedContacts([]);
+      }
+      return failed === 0;
+    } catch (err) {
+      console.error("Error sending template broadcast:", err);
+      setError("Failed to send template message");
+      return false;
+    } finally {
+      setSending(false);
+    }
+  };
+
+  // Update a contact's variables
+  const updateContactVariables = (contactId: string, variableName: string, value: string) => {
+    setSelectedContacts(prevContacts => {
+      return prevContacts.map(contact => {
+        if (contact.id === contactId) {
+          return {
+            ...contact,
+            variables: {
+              ...(contact.variables || {}),
+              [variableName]: value
+            }
+          };
+        }
+        return contact;
+      });
+    });
   };
 
   return (
@@ -755,23 +1331,33 @@ export default function BroadcastPage() {
                       <i className="fas fa-users me-2"></i>
                       Select Recipients
                     </h6>
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-light text-primary fw-semibold"
-                      onClick={() => setShowContactManager(true)}
-                    >
-                      <i className="fas fa-cog me-1"></i>
-                      Manage ({selectedContacts.length})
-                    </button>
+                    <div>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-light text-primary fw-semibold me-2"
+                        onClick={() => setShowBulkImportModal(true)}
+                      >
+                        <i className="fas fa-file-import me-1"></i>
+                        Import
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-light text-primary fw-semibold"
+                        onClick={() => setShowContactManager(true)}
+                      >
+                        <i className="fas fa-cog me-1"></i>
+                        Manage ({selectedContacts.length})
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <div className="card-body">
                   <div className="mb-4">
                     <label className="form-label fw-semibold">
                       <i className="fas fa-plus-circle me-2 text-success"></i>
-                      Quick Add Phone Number
+                      Quick Add Contact
                     </label>
-                    <div className="input-group">
+                    <div className="input-group mb-2">
                       <span className="input-group-text">
                         <i className="fab fa-whatsapp text-success"></i>
                       </span>
@@ -780,7 +1366,22 @@ export default function BroadcastPage() {
                         className="form-control"
                         value={newContactId}
                         onChange={(e) => setNewContactId(e.target.value)}
-                        placeholder="e.g. +254 712 345 678"
+                        placeholder="Phone Number: +1234567890"
+                        onKeyPress={(e) => {
+                          if (e.key === "Enter") addNewContact();
+                        }}
+                      />
+                    </div>
+                    <div className="input-group">
+                      <span className="input-group-text">
+                        <i className="fas fa-user text-primary"></i>
+                      </span>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={newContactName}
+                        onChange={(e) => setNewContactName(e.target.value)}
+                        placeholder="Contact Name (optional)"
                         onKeyPress={(e) => {
                           if (e.key === "Enter") addNewContact();
                         }}
@@ -891,6 +1492,7 @@ export default function BroadcastPage() {
                     {isTemplateMode ? (
                       <TemplateMessageInput
                         templates={templates}
+                        contacts={selectedContacts}
                         onSend={handleSendTemplateMessage}
                         onCreateTemplate={() => setShowTemplateModal(true)}
                         onSyncTemplates={syncTemplates}
@@ -913,6 +1515,7 @@ export default function BroadcastPage() {
           </div>
         </div>
 
+                {/* Contact Manager Modal */}
         {showContactManager && (
           <>
             <div className="modal-backdrop fade show"></div>
@@ -995,6 +1598,70 @@ export default function BroadcastPage() {
             </div>
           </>
         )}
+
+        {/* Bulk Import Modal */}
+        {showBulkImportModal && (
+          <>
+            <div className="modal-backdrop fade show"></div>
+            <div className="modal fade show" style={{ display: 'block' }} tabIndex={-1} role="dialog">
+              <div className="modal-dialog">
+                <div className="modal-content">
+                  <div className="modal-header bg-primary text-white">
+                    <h5 className="mb-0">
+                      <i className="fas fa-file-import me-2"></i>
+                      Import Contacts
+                    </h5>
+                    <button type="button" className="btn-close btn-close-white" onClick={() => setShowBulkImportModal(false)}></button>
+                  </div>
+                  <div className="modal-body">
+                    <p>Enter one contact per line in the format:</p>
+                    <p className="bg-light p-2 border rounded"><code>+PhoneNumber,Name</code></p>
+                    <p className="text-muted small">Example: <br />+12345678901,John Smith<br />+44123456789,Jane Doe</p>
+                    
+                    <div className="form-group mb-3">
+                      <label className="form-label">Contact List:</label>
+                      <textarea 
+                        className="form-control" 
+                        rows={10}
+                        value={bulkImportText}
+                        onChange={(e) => setBulkImportText(e.target.value)}
+                        placeholder="+12345678901,John Smith
++44123456789,Jane Doe"
+                      ></textarea>
+                    </div>
+                  </div>
+                  <div className="modal-footer">
+                    <button type="button" className="btn btn-secondary" onClick={() => setShowBulkImportModal(false)}>
+                      Cancel
+                    </button>
+                    <button type="button" className="btn btn-primary" onClick={processBulkImport}>
+                      <i className="fas fa-file-import me-1"></i>
+                      Import
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Variable Preview Modal */}
+        <div className="modal fade" id="variablePreviewModal" tabIndex={-1}>
+          <div className="modal-dialog">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Preview Personalized Message</h5>
+                <button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <div className="modal-body">
+                <div id="previewContent" className="p-3 border rounded bg-light"></div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <CreateTemplateModal
           show={showTemplateModal}
