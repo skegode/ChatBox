@@ -23,6 +23,8 @@ type MessageVm = {
   messageDateTime: string | Date;
   isIncoming: boolean;
   contextMessageId?: string | null;
+  sentBy?: number | null;
+  senderName?: string | null;
 };
 
 type MessageStatus = "sent" | "delivered" | "read";
@@ -283,6 +285,47 @@ export default function ChatPage() {
       }
 
       const tempId = `temp-${Date.now()}`;
+      
+      // Define type guards with proper interfaces
+      interface UserWithId { id: number; }
+      interface UserWithUserId { userId: number; }
+      interface UserWithName { firstName: string; otherName?: string; }
+      
+      // Type-safe checks
+      const hasId = (u: unknown): u is UserWithId => 
+        u !== null && typeof u === 'object' && 'id' in u && typeof (u as UserWithId).id === 'number';
+        
+      const hasUserId = (u: unknown): u is UserWithUserId => 
+        u !== null && typeof u === 'object' && 'userId' in u && typeof (u as UserWithUserId).userId === 'number';
+        
+      const hasName = (u: unknown): u is UserWithName => 
+        u !== null && 
+        typeof u === 'object' && 
+        'firstName' in u && 
+        typeof (u as UserWithName).firstName === 'string';
+      
+      // Extract user ID safely
+      let userId: number | null = null;
+      if (user) {
+        if (hasId(user)) {
+          userId = user.id;
+        } else if (hasUserId(user)) {
+          userId = user.userId;
+        }
+      }
+      
+      // Extract user name safely - only use firstName and otherName as requested
+      let userName = "You";
+      if (user && hasName(user)) {
+        if (user.firstName) {
+          if ('otherName' in user && typeof user.otherName === 'string') {
+            userName = `${user.firstName} ${user.otherName}`;
+          } else {
+            userName = user.firstName;
+          }
+        }
+      }
+        
       const optimisticMessage: MessageVm = {
         id: 0,
         messageId: tempId,
@@ -294,6 +337,8 @@ export default function ChatPage() {
         messageDateTime: new Date(),
         isIncoming: false,
         contextMessageId: quote?.messageId || null,
+        sentBy: userId,
+        senderName: userName,
       };
       setMessages((prev) =>
         prev ? [...prev, optimisticMessage] : [optimisticMessage]
@@ -446,7 +491,18 @@ export default function ChatPage() {
                       className="btn nav-btn user-profile-show"
                     >
                       <i className="ri-user-2-line" /> Assigned to you as{" "}
-                      {user.role}
+                      {(() => {
+                        // Type-safe role check without using 'any'
+                        interface UserWithRole { role: string; }
+                        
+                        const hasRole = (u: unknown): u is UserWithRole => 
+                          u !== null && 
+                          typeof u === 'object' && 
+                          'role' in u && 
+                          typeof (u as UserWithRole).role === 'string';
+                          
+                        return hasRole(user) ? user.role : 'User';
+                      })()}
                     </button>
                   </li>
                 )}
@@ -563,6 +619,7 @@ export default function ChatPage() {
                         chatId: chatId || "",
                         mediaPath: mediaUrl ?? undefined,
                         messageType: inferredType,
+                        senderName: !m.isIncoming ? m.senderName : null,
                       }}
                       quotedText={quotedMessage?.messageText ?? null}
                       onReply={() => {

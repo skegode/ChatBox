@@ -12,6 +12,7 @@ type Message = {
   chatId: string;
   mediaPath?: string | null;
   messageType?: string | null;
+  senderName?: string | null;
 };
 
 type MessageBubbleProps = {
@@ -380,6 +381,11 @@ export default function MessageBubble({
                 </span>
               )}
             </p>
+            {isOutgoing && message.senderName && (
+              <p className="text-xs text-muted mt-1 mb-0">
+                Sent by {message.senderName}
+              </p>
+            )}
           </div>
           <div
             className="dropdown align-self-start"
