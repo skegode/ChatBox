@@ -19,6 +19,17 @@ type UserItem = {
   department?: string | null;
 };
 
+type Role = {
+  id: number;
+  name: string | null;
+  accessRights: string | null;
+};
+
+type Department = {
+  id: number;
+  name: string | null;
+};
+
 export default function UsersPage() {
   const [users, setUsers] = useState<UserItem[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -27,10 +38,19 @@ export default function UsersPage() {
 
   // editing modal state
   const [editingUser, setEditingUser] = useState<UserItem | null>(null);
+  const [editFirstName, setEditFirstName] = useState('');
+  const [editOtherName, setEditOtherName] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editEmail, setEditEmail] = useState('');
+  const [editRoleId, setEditRoleId] = useState<number | null>(null);
+  const [editDepartmentId, setEditDepartmentId] = useState<number | null>(null);
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  
+  // roles and departments data
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [loadingDropdowns, setLoadingDropdowns] = useState(false);
 
   const fetchUsers = useCallback(async (showLoading = true) => {
     if (showLoading) {
@@ -64,23 +84,61 @@ export default function UsersPage() {
     }
   }, []);
 
+  const fetchRolesAndDepartments = useCallback(async () => {
+    setLoadingDropdowns(true);
+    try {
+      const [rolesRes, deptsRes] = await Promise.all([
+        api.get('api/Users/roles'),
+        api.get('api/Users/departments')
+      ]);
+      
+      if (Array.isArray(rolesRes.data)) {
+        setRoles(rolesRes.data);
+      }
+      
+      if (Array.isArray(deptsRes.data)) {
+        setDepartments(deptsRes.data);
+      }
+    } catch (err) {
+      console.error('Failed to load dropdown data', err);
+    } finally {
+      setLoadingDropdowns(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchUsers(true);
+    fetchRolesAndDepartments();
     const id = setInterval(() => fetchUsers(false), 30000);
     return () => clearInterval(id);
-  }, [fetchUsers]);
+  }, [fetchUsers, fetchRolesAndDepartments]);
 
   const openEdit = (u: UserItem) => {
     setEditingUser(u);
+    setEditFirstName(u.firstName ?? '');
+    setEditOtherName(u.otherName ?? '');
     setEditPhone(u.phoneNumber ?? '');
     setEditEmail(u.email ?? '');
+    
+    // Find role ID based on role name
+    const roleObj = roles.find(r => r.name === u.role);
+    setEditRoleId(roleObj?.id ?? null);
+    
+    // Find department ID based on department name
+    const deptObj = departments.find(d => d.name === u.department);
+    setEditDepartmentId(deptObj?.id ?? null);
+    
     setEditError(null);
   };
 
   const closeEdit = () => {
     setEditingUser(null);
+    setEditFirstName('');
+    setEditOtherName('');
     setEditPhone('');
     setEditEmail('');
+    setEditRoleId(null);
+    setEditDepartmentId(null);
     setEditError(null);
     setEditLoading(false);
   };
@@ -91,14 +149,31 @@ export default function UsersPage() {
     setEditError(null);
     try {
       const payload = {
+        firstName: editFirstName,
+        otherName: editOtherName,
         phoneNumber: editPhone,
         email: editEmail,
+        roleID: editRoleId,
+        departmentID: editDepartmentId
       };
       const res = await api.put(`api/Users/${editingUser.id}`, payload);
+      
+      // Find role and department names from their IDs for the optimistic update
+      const roleName = roles.find(r => r.id === editRoleId)?.name ?? null;
+      const deptName = departments.find(d => d.id === editDepartmentId)?.name ?? null;
+      
       // update local list (optimistic)
       setUsers((prev) =>
         prev
-          ? prev.map((u) => (u.id === editingUser.id ? { ...u, phoneNumber: editPhone, email: editEmail } : u))
+          ? prev.map((u) => (u.id === editingUser.id ? { 
+              ...u, 
+              firstName: editFirstName,
+              otherName: editOtherName,
+              phoneNumber: editPhone, 
+              email: editEmail,
+              role: roleName,
+              department: deptName
+            } : u))
           : prev
       );
       closeEdit();
@@ -185,12 +260,50 @@ export default function UsersPage() {
                   <div className="modal-body">
                     {editError && <div className="alert alert-danger">{editError}</div>}
                     <div className="mb-3">
+                      <label className="form-label">First Name</label>
+                      <input type="text" className="form-control" value={editFirstName} onChange={(e) => setEditFirstName(e.target.value)} />
+                    </div>
+                    <div className="mb-3">
+                      <label className="form-label">Other Name</label>
+                      <input type="text" className="form-control" value={editOtherName} onChange={(e) => setEditOtherName(e.target.value)} />
+                    </div>
+                    <div className="mb-3">
                       <label className="form-label">Phone number</label>
                       <input type="text" className="form-control" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
                     </div>
                     <div className="mb-3">
                       <label className="form-label">Email</label>
                       <input type="email" className="form-control" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} />
+                    </div>
+                    <div className="mb-3">
+                      <label className="form-label">Role</label>
+                      <select 
+                        className="form-select" 
+                        value={editRoleId || ''} 
+                        onChange={(e) => setEditRoleId(e.target.value ? Number(e.target.value) : null)}
+                        disabled={loadingDropdowns}
+                      >
+                        <option value="">Select Role</option>
+                        {roles.map(role => (
+                          <option key={role.id} value={role.id}>{role.name}</option>
+                        ))}
+                      </select>
+                      {loadingDropdowns && <small className="text-muted">Loading roles...</small>}
+                    </div>
+                    <div className="mb-3">
+                      <label className="form-label">Department</label>
+                      <select 
+                        className="form-select" 
+                        value={editDepartmentId || ''} 
+                        onChange={(e) => setEditDepartmentId(e.target.value ? Number(e.target.value) : null)}
+                        disabled={loadingDropdowns}
+                      >
+                        <option value="">Select Department</option>
+                        {departments.map(dept => (
+                          <option key={dept.id} value={dept.id}>{dept.name}</option>
+                        ))}
+                      </select>
+                      {loadingDropdowns && <small className="text-muted">Loading departments...</small>}
                     </div>
                   </div>
                   <div className="modal-footer">
