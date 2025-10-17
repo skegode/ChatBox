@@ -839,10 +839,10 @@ function CreateTemplateModal({ show, onClose, onCreate }: { show: boolean; onClo
 
     try {
       await api.post("/api/Messages/templates", {
-        Name: name,
-        LanguageCode: languageCode,
-        Category: category,
-        Components: components,
+        name: name,
+        languageCode: languageCode,
+        category: category,
+        components: components,
       });
       onCreate();
       onClose();
