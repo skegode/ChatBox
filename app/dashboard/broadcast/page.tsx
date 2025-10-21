@@ -8,6 +8,22 @@ import ProtectedRoute from '../../../components/ProtectedRoute';
 import { CSVLink } from "react-csv";
 import Papa from 'papaparse';
 
+// Add Bootstrap Modal typings so we don't use `any`
+declare global {
+  interface BootstrapModalInstance {
+    show?: () => void;
+    hide?: () => void;
+  }
+  interface BootstrapModalConstructor {
+    getOrCreateInstance?: (el: Element | null) => BootstrapModalInstance | undefined;
+  }
+  interface BootstrapStatic {
+    Modal?: BootstrapModalConstructor;
+  }
+  interface Window {
+    bootstrap?: BootstrapStatic;
+  }
+}
 
 // --- SVG Icon Components ---
 const PaperclipIcon = () => (
@@ -309,13 +325,15 @@ function TemplateMessageInput({
   contacts, 
   onSend, 
   onCreateTemplate, 
-  onSyncTemplates 
+  onSyncTemplates,
+  onUpdateContactVariables
 }: {   
    templates: Template[]; 
   contacts: Contact[];
   onSend: (templateName: string, languageCode: string, recipients: TemplateRecipient[]) => Promise<boolean>;
   onCreateTemplate: () => void; 
-  onSyncTemplates: () => void 
+  onSyncTemplates: () => void;
+  onUpdateContactVariables: (contactId: string, variableName: string, value: string) => void;
 }) {
 
   const [templateName, setTemplateName] = useState("");
@@ -432,38 +450,47 @@ function TemplateMessageInput({
   };
 
   const processCsvData = (data: CsvDataRow[]) => {
-    // Map CSV data to contacts with variables
-    const updatedContacts = [...contacts];    
-    
-     data.forEach((row) => {
-      const phoneNumber = row.phoneNumber;
-      if (!phoneNumber) return;
-      
-      // Find matching contact
-      const contactIndex = updatedContacts.findIndex(c => 
-        c.id === phoneNumber || c.id === `+${phoneNumber}`
-      );
-      
-      if (contactIndex >= 0) {
-        // Initialize variables object if needed
-        if (!updatedContacts[contactIndex].variables) {
-          updatedContacts[contactIndex].variables = {};
-        }
-        
-             // Map all variable fields from CSV
-        Object.keys(row).forEach(key => {
-          if (key.startsWith('variable_')) {
-            const varIndex = key.split('_')[1];
-            if (varIndex) {
-              updatedContacts[contactIndex].variables![`var_${varIndex}`] = row[key];
+    // Map CSV data to contacts with variables by calling parent updater
+    data.forEach((row) => {
+      const phoneNumberRaw = row.phoneNumber;
+      if (!phoneNumberRaw) return;
+
+      // Normalize formats to try to match contact.id values (which generally are "+...").
+      const variants = new Set<string>();
+      const cleaned = phoneNumberRaw.trim();
+      variants.add(cleaned);
+      variants.add(formatWhatsAppNumber(cleaned));
+      variants.add(cleaned.replace(/^\+/, ""));
+      variants.add(cleaned.replace(/^00/, '').replace(/^\+?/, '+'));
+
+      // find contact in provided contacts prop
+      const matched = contacts.find(c => {
+        if (!c?.id) return false;
+        const idNoPlus = c.id.replace(/^\+/, "");
+        return variants.has(c.id) || variants.has(idNoPlus) || variants.has(c.id.replace(/^\+/, ""));
+      });
+
+      if (!matched) return;
+
+      // For each variable column in the CSV row, call parent updater
+      Object.keys(row).forEach(key => {
+        if (key.startsWith('variable_')) {
+          const parts = key.split('_');
+          const varIndex = parts[1];
+          if (varIndex) {
+            const varName = `var_${varIndex}`;
+            const value = row[key] ?? '';
+            try {
+              onUpdateContactVariables(matched.id, varName, value);
+            } catch (e) {
+              console.error("onUpdateContactVariables callback error:", e);
             }
           }
-        });
-      }
+        }
+      });
     });
-    
-    // Update the contacts state in parent component
-    // This requires adding a callback from parent component
+
+    // close upload modal
     setShowCsvUpload(false);
   };
 
@@ -629,18 +656,8 @@ function TemplateMessageInput({
                                   placeholder={`Variable ${v.index}`}
                                   value={contact.variables?.[`var_${v.index}`] || ''}
                                   onChange={(e) => {
-                                    // Update the contact's variables
-                                    const updatedContacts = [...contacts];
-                                    const contactIndex = updatedContacts.findIndex(c => c.id === contact.id);
-                                    
-                                    if (contactIndex >= 0) {
-                                      if (!updatedContacts[contactIndex].variables) {
-                                        updatedContacts[contactIndex].variables = {};
-                                      }
-                                      
-                                      updatedContacts[contactIndex].variables![`var_${v.index}`] = e.target.value;
-                                      // You need to pass this updated contacts array back to parent component
-                                    }
+                                    // propagate the change to parent so selectedContacts are updated
+                                    onUpdateContactVariables(contact.id, `var_${v.index}`, e.target.value);
                                   }}
                                 />
                               </td>
@@ -652,6 +669,23 @@ function TemplateMessageInput({
                               data-bs-toggle="tooltip"
                               data-bs-placement="top"
                               title="View personalized preview"
+                              onClick={() => {
+                                // show a simple alert-style preview in the modal element (keeps behavior minimal)
+                                const previewBody = getPreviewText(templatePreview.body, contact.variables);
+                                const previewHeader = getPreviewText(templatePreview.header, contact.variables);
+                                const previewFooter = getPreviewText(templatePreview.footer, contact.variables);
+                                const content = `
+Header: ${previewHeader || '-'}
+Body: ${previewBody || '-'}
+Footer: ${previewFooter || '-'}
+`;
+                                // find previewContent element and set text
+                                const el = document.getElementById('previewContent');
+                                if (el) el.textContent = content;
+                                // show bootstrap modal if present
+                                const modal = window.bootstrap?.Modal?.getOrCreateInstance?.(document.getElementById('variablePreviewModal'));
+                                modal?.show?.();
+                              }}
                             >
                               <i className="fas fa-eye"></i>
                             </button>
@@ -1248,21 +1282,7 @@ export default function BroadcastPage() {
       const response = await api.post("/api/Messages/broadcast-template", {
         templateName,
         languageCode,
-        recipients: selectedContacts.map(contact => {
-          // Find the template we're using
-          const template = templates.find(t => t.name === templateName && t.languageCode === languageCode);
-          const templateVars = template ? parseTemplateVariables(template) : [];
-          
-          // Extract variables in correct order
-          const variables = templateVars
-            .sort((a, b) => a.index - b.index)
-            .map(v => contact.variables?.[`var_${v.index}`] || '');
-          
-          return {
-            phoneNumber: contact.id.replace(/^\+/, ""),
-            variables
-          };
-        })
+        recipients: recipients // Use recipients passed from TemplateMessageInput
       });
 
       const successful = response.data.successful || 0;
@@ -1493,6 +1513,7 @@ export default function BroadcastPage() {
                         onSend={handleSendTemplateMessage}
                         onCreateTemplate={() => setShowTemplateModal(true)}
                         onSyncTemplates={syncTemplates}
+                        onUpdateContactVariables={updateContactVariables}
                       />
                     ) : (
                       <RegularMessageInput
