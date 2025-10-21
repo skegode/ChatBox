@@ -944,7 +944,7 @@ function CreateTemplateModal({ show, onClose, onCreate }: { show: boolean; onClo
                 <small className="text-muted">Fixed text that appears at the bottom of your message</small>
               </div>
             </div>
-            <div className="modal-footer">
+            <div className="modal-footer d-flex justify-content-between">
               <button type="button" className="btn btn-secondary" onClick={onClose}>Close</button>
               <button 
                 type="button" 
@@ -1306,7 +1306,7 @@ export default function BroadcastPage() {
           <h4 className="mb-0"><i className="ri-broadcast-line me-2" />Broadcast Message</h4>
         </div>
 
-        <div className="chat-conversation p-3 p-lg-4" style={{ height: 'calc(100vh - 140px)', overflowY: 'auto' }}>
+        <div className="chat-conversation p-3 p-lg-4" style={{ height: '90vh', overflowY: 'auto' }}>
           {error && (
             <div className="alert alert-danger alert-dismissible fade show mb-3" role="alert">
               <i className="fas fa-exclamation-triangle me-2"></i>
@@ -1323,50 +1323,47 @@ export default function BroadcastPage() {
           )}
 
           <div className="row g-4">
-            <div className="col-lg-5">
-              <div className="card h-100 shadow-sm">
-                <div className="card-header bg-primary text-white">
-                  <div className="d-flex justify-content-between align-items-center">
-                    <h6 className="mb-0">
-                      <i className="fas fa-users me-2"></i>
-                      Select Recipients
-                    </h6>
-                    <div>
-                      <button
-                        type="button"
-                        className="btn btn-sm btn-light text-primary fw-semibold me-2"
-                        onClick={() => setShowBulkImportModal(true)}
-                      >
-                        <i className="fas fa-file-import me-1"></i>
-                        Import
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-sm btn-light text-primary fw-semibold"
-                        onClick={() => setShowContactManager(true)}
-                      >
-                        <i className="fas fa-cog me-1"></i>
-                        Manage ({selectedContacts.length})
-                      </button>
-                    </div>
-                  </div>
+            <div className="col-lg-4">
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <h6 className="mb-0">
+                  <i className="mdi mdi-account-multiple-outline me-2"></i>
+                  Recipients
+                </h6>
+                <div>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-light text-primary fw-semibold me-2"
+                    onClick={() => setShowBulkImportModal(true)}
+                  >
+                    <i className="fas fa-file-import me-1"></i>
+                    Import
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-light text-primary fw-semibold"
+                    onClick={() => setShowContactManager(true)}
+                  >
+                    <i className="fas fa-cog me-1"></i>
+                    Manage ({selectedContacts.length})
+                  </button>
                 </div>
+              </div>
+              <div className="card border">
                 <div className="card-body">
-                  <div className="mb-4">
-                    <label className="form-label fw-semibold">
-                      <i className="fas fa-plus-circle me-2 text-success"></i>
+                  <div className="mb-3">
+                    <label className="form-label text-center fw-semibold">
                       Quick Add Contact
                     </label>
                     <div className="input-group mb-2">
                       <span className="input-group-text">
-                        <i className="fab fa-whatsapp text-success"></i>
+                        <i className="mdi mdi-phone"></i>
                       </span>
                       <input
                         type="text"
                         className="form-control"
                         value={newContactId}
                         onChange={(e) => setNewContactId(e.target.value)}
-                        placeholder="Phone Number: +1234567890"
+                        placeholder="+1234567890"
                         onKeyPress={(e) => {
                           if (e.key === "Enter") addNewContact();
                         }}
@@ -1374,7 +1371,7 @@ export default function BroadcastPage() {
                     </div>
                     <div className="input-group">
                       <span className="input-group-text">
-                        <i className="fas fa-user text-primary"></i>
+                        <i className="mdi mdi-account-circle"></i>
                       </span>
                       <input
                         type="text"
@@ -1386,94 +1383,93 @@ export default function BroadcastPage() {
                           if (e.key === "Enter") addNewContact();
                         }}
                       />
-                      <button className="btn btn-success" onClick={addNewContact} type="button">
-                        <i className="fas fa-plus"></i>
+                      <button className="btn btn-primary" onClick={addNewContact} type="button">
+                        <i className="mdi mdi-plus"></i>
                       </button>
-                    </div>
-                  </div>
-
-                  <div className="mb-3">
-                    <div className="d-flex justify-content-between align-items-center mb-3">
-                      <label className="form-label fw-semibold mb-0">
-                        <i className="fas fa-address-book me-2 text-info"></i>
-                        Your Contacts
-                      </label>
-                      <button
-                        type="button"
-                        className="btn btn-sm btn-outline-info"
-                        onClick={selectAllContacts}
-                        disabled={loading}
-                      >
-                        <i className="fas fa-check-double me-1"></i>
-                        Select All
-                      </button>
-                    </div>
-                    
-                    <div
-                      className="border rounded-3 p-3 bg-light"
-                      style={{ maxHeight: "350px", overflowY: "auto" }}
-                    >
-                      {loading ? (
-                        <div className="text-center py-4">
-                          <div className="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
-                          <span className="text-muted">Loading contacts...</span>
-                        </div>
-                      ) : availableContacts.length === 0 ? (
-                        <div className="text-center py-4 text-muted">
-                          <i className="fas fa-user-slash fs-2 mb-2 d-block"></i>
-                          <p className="mb-0">No saved contacts found</p>
-                        </div>
-                      ) : (
-                        <div className="row g-2">
-                          {availableContacts.map((contact, index) => {
-                            const isSelected = selectedContacts.some((c) => c.id === contact.id);
-                            return (
-                              <div key={`available-${contact.id}-${index}`} className="col-12">
-                                <div className={`card border ${isSelected ? 'border-success bg-light' : 'border-light'} mb-1`}>
-                                  <div className="card-body py-2 px-3">
-                                    <div className="form-check mb-0">
-                                      <input
-                                        className="form-check-input"
-                                        type="checkbox"
-                                        id={`contact-${contact.id}-${index}`}
-                                        checked={isSelected}
-                                        onChange={(e) => handleSelectContact(contact, e.target.checked)}
-                                      />
-                                      <label className="form-check-label fw-medium" htmlFor={`contact-${contact.id}-${index}`}>
-                                        <div className="d-flex align-items-center">
-                                          <i className="fas fa-user-circle text-muted me-2"></i>
-                                          <div>
-                                            <div>{contact.name}</div>
-                                            {contact.name !== contact.id && (
-                                              <small className="text-muted">{contact.id}</small>
-                                            )}
-                                          </div>
-                                        </div>
-                                      </label>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>
               </div>
+              <div className="mb-3">
+                <div className="d-flex justify-content-between align-items-center mb-3">
+                  <label className="form-label fw-semibold mb-0">
+                    <i className="mdi mdi-book-account me-2"></i>
+                    Contacts
+                  </label>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-info"
+                    onClick={selectAllContacts}
+                    disabled={loading}
+                  >
+                    <i className="fas fa-check-double me-1"></i>
+                    Select All
+                  </button>
+                </div>
+                
+                <div
+                  className="border rounded-3 p-3 bg-light"
+                  style={{ maxHeight: "50vh", overflowY: "auto" }}
+                >
+                  {loading ? (
+                    <div className="text-center py-4">
+                      <div className="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                      <span className="text-muted">Loading contacts...</span>
+                    </div>
+                  ) : availableContacts.length === 0 ? (
+                    <div className="text-center py-4 text-muted">
+                      <i className="fas fa-user-slash fs-2 mb-2 d-block"></i>
+                      <p className="mb-0">No saved contacts found</p>
+                    </div>
+                  ) : (
+                    <div className="row g-2">
+                      {availableContacts.map((contact, index) => {
+                        const isSelected = selectedContacts.some((c) => c.id === contact.id);
+                        return (
+                          <div key={`available-${contact.id}-${index}`} className="col-12">
+                            <div className={`card border ${isSelected ? 'border-success bg-light' : 'border-light'} mb-1`}>
+                              <div className="card-body py-2 px-3">
+                                <div className="form-check mb-0">
+                                  <input
+                                    className="form-check-input"
+                                    type="checkbox"
+                                    id={`contact-${contact.id}-${index}`}
+                                    checked={isSelected}
+                                    onChange={(e) => handleSelectContact(contact, e.target.checked)}
+                                  />
+                                  <label className="form-check-label fw-medium" htmlFor={`contact-${contact.id}-${index}`}>
+                                    <div className="d-flex align-items-center">
+                                      <i className="fas fa-user-circle text-muted me-2"></i>
+                                      <div>
+                                        <div>{contact.name}</div>
+                                        {contact.name !== contact.id && (
+                                          <small className="text-muted">{contact.id}</small>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </label>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
-            <div className="col-lg-7">
+            <div className="col-lg-8">
               <div className="card h-100 shadow-sm">
-                <div className="card-header bg-success text-white">
+                <div className="card-header bg-white">
                   <h6 className="mb-0">
-                    <i className="fas fa-edit me-2"></i>
-                    Compose Broadcast Message
+                    <i className="mdi mdi-message-processing-outline me-2"></i>
+                    Broadcast Message
                   </h6>
                 </div>
-                <div className="card-body d-flex flex-column justify-content-center">
-                  <div className="d-flex justify-content-end mb-3">
+                <div className="card-body d-flex flex-column justify-content-end">
+                  <div className="d-flex justify-content-start mb-3">
                     <div className="form-check form-switch">
                       <input
                         className="form-check-input"
@@ -1488,7 +1484,7 @@ export default function BroadcastPage() {
                     </div>
                   </div>
 
-                  <div className="chat-input-wrapper border rounded-3 bg-white p-3 mx-auto" style={{ width: "100%", maxWidth: "600px" }}>
+                  <div className="chat-input-wrapper border rounded-3 bg-white p-3 mx-auto" style={{ width: '100%' }}>
                     {isTemplateMode ? (
                       <TemplateMessageInput
                         templates={templates}
@@ -1522,13 +1518,15 @@ export default function BroadcastPage() {
             <div className="modal fade show" style={{ display: 'block' }} tabIndex={-1} role="dialog">
               <div className="modal-dialog modal-lg modal-dialog-scrollable">
                 <div className="modal-content">
-                  <div className="modal-header bg-primary text-white">
+                  {/* <div className="modal-header">
                     <h5 className="mb-0">
                       <i className="fas fa-users-cog me-2"></i>
                       Manage Recipients
                     </h5>
-                    <button type="button" className="btn-close btn-close-white" onClick={() => setShowContactManager(false)}></button>
-                  </div>
+                    <button type="button" className="btn-close btn-close-white" onClick={() => setShowContactManager(false)}>
+
+                    </button>
+                  </div> */}
 
                   <div className="modal-body">
                     <div className="d-flex justify-content-between align-items-center mb-3">
@@ -1606,12 +1604,12 @@ export default function BroadcastPage() {
             <div className="modal fade show" style={{ display: 'block' }} tabIndex={-1} role="dialog">
               <div className="modal-dialog">
                 <div className="modal-content">
-                  <div className="modal-header bg-primary text-white">
+                  <div className="modal-header">
                     <h5 className="mb-0">
                       <i className="fas fa-file-import me-2"></i>
                       Import Contacts
                     </h5>
-                    <button type="button" className="btn-close btn-close-white" onClick={() => setShowBulkImportModal(false)}></button>
+                    <button type="button" className="btn-close" onClick={() => setShowBulkImportModal(false)}></button>
                   </div>
                   <div className="modal-body">
                     <p>Enter one contact per line in the format:</p>
@@ -1625,12 +1623,11 @@ export default function BroadcastPage() {
                         rows={10}
                         value={bulkImportText}
                         onChange={(e) => setBulkImportText(e.target.value)}
-                        placeholder="+12345678901,John Smith
-+44123456789,Jane Doe"
+                        placeholder="+12345678901,John Smith +44123456789,Jane Doe"
                       ></textarea>
                     </div>
                   </div>
-                  <div className="modal-footer">
+                  <div className="modal-footer d-flex justify-content-between">
                     <button type="button" className="btn btn-secondary" onClick={() => setShowBulkImportModal(false)}>
                       Cancel
                     </button>
