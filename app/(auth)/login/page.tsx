@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import ErrorMessage from '../../../components/ui/ErrorMessage';
 import { useAuth } from '../../../components/providers/AuthProvider';
+import { ApiError, isApiError } from '../../../lib/api';
 
 export default function LoginPage() {
   const [phone, setPhone] = useState('');
@@ -12,6 +13,7 @@ export default function LoginPage() {
   const [remember, setRemember] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
   const { login } = useAuth();
 
@@ -28,9 +30,28 @@ export default function LoginPage() {
       await login(phone, password);
       router.push('/dashboard');
     } catch (err: unknown) {
-      if (err instanceof Error) {
+      // Prefer ApiError-specific handling
+      if (isApiError(err)) {
+        console.error('Login failed (ApiError):', err);
+        // Network-level / unreachable server
+        if (err.code === 'ERR_NETWORK' || err.message === 'Network Error' || (err.statusCode === undefined && err.responseData === undefined)) {
+          const offlineMsg =
+            typeof navigator !== 'undefined' && !navigator.onLine
+              ? 'You appear to be offline. Check your network connection.'
+              : 'Server unreachable — try again later.';
+          setError(`Network error: ${offlineMsg}`);
+        } else if (err.statusCode === 401) {
+          setError('Login failed. Please check your credentials.');
+        } else if (err.errorMessage) {
+          setError(err.errorMessage);
+        } else {
+          setError(err.message || 'Failed to login');
+        }
+      } else if (err instanceof Error) {
+        console.error('Login failed (Error):', err);
         setError(err.message);
       } else {
+        console.error('Login failed (unknown):', err);
         setError('Failed to login');
       }
     } finally {
@@ -86,7 +107,7 @@ export default function LoginPage() {
                           <i className="ri-lock-2-line"></i>
                         </span>
                         <input
-                          type="password"
+                          type={showPassword ? 'text' : 'password'}
                           className="form-control form-control-lg border-light bg-light-subtle"
                           placeholder="Enter Password"
                           aria-label="Enter Password"
@@ -95,6 +116,15 @@ export default function LoginPage() {
                           onChange={e => setPassword(e.target.value)}
                           autoComplete="current-password"
                         />
+                        <button
+                          type="button"
+                          className="btn btn-light"
+                          onClick={() => setShowPassword(s => !s)}
+                          aria-label={showPassword ? 'Hide password' : 'Show password'}
+                          title={showPassword ? 'Hide password' : 'Show password'}
+                        >
+                          <i className={showPassword ? 'ri-eye-off-line' : 'ri-eye-line'}></i>
+                        </button>
                       </div>
                     </div>
 

@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 
 // central base URL for API (single source of truth)
 const BASE_API_URL = "https://app.servicesuitecloud.com/WhatsappApi";
@@ -12,82 +12,146 @@ const api = axios.create({
   baseURL: BASE_API_URL,
   //baseURL:"https://localhost:7003",
   withCredentials: true,
-  headers: {   
-    'Accept': 'application/json'
-  }
+  headers: {
+    Accept: "application/json",
+  },
 });
 
+// Custom ApiError that preserves instanceof Error and adds fields
+export class ApiError extends Error {
+  public isApiError = true;
+  public statusCode?: number;
+  public responseData?: unknown;
+  public code?: string;
+  public config?: unknown;
+  public errorMessage?: string;
+
+  constructor(message: string, opts?: { statusCode?: number; responseData?: unknown; code?: string; config?: unknown }) {
+    super(message);
+    this.name = "ApiError";
+    this.statusCode = opts?.statusCode;
+    this.responseData = opts?.responseData;
+    this.code = opts?.code;
+    this.config = opts?.config;
+    this.errorMessage = message;
+
+    // restore prototype chain (important when transpiled)
+    Object.setPrototypeOf(this, ApiError.prototype);
+  }
+}
+
+// Type guard for client code
+export function isApiError(err: unknown): err is ApiError {
+  if (err instanceof ApiError) return true;
+  if (err instanceof Error) {
+    const maybe = err as unknown as Record<string, unknown>;
+    return maybe?.["isApiError"] === true;
+  }
+  return false;
+}
+
+// Helpers to safely read properties from unknown payloads
+function getStringProp(obj: unknown, key: string): string | undefined {
+  if (obj && typeof obj === "object") {
+    const rec = obj as Record<string, unknown>;
+    const val = rec[key];
+    return typeof val === "string" ? val : undefined;
+  }
+  return undefined;
+}
+
+function getProp(obj: unknown, key: string): unknown | undefined {
+  if (obj && typeof obj === "object") {
+    const rec = obj as Record<string, unknown>;
+    return rec[key];
+  }
+  return undefined;
+}
+
 // Add request interceptor for auth and debugging
-api.interceptors.request.use(config => {
+api.interceptors.request.use((config) => {
   // Attach JWT token if available
-  const token = localStorage.getItem('token');
+  const token = typeof localStorage !== "undefined" ? localStorage.getItem("token") : null;
   if (token) {
     config.headers = config.headers || {};
-    config.headers['Authorization'] = `Bearer ${token}`;
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore - axios header typing can be strict here
+    config.headers["Authorization"] = `Bearer ${token}`;
   }
-  console.log(`📤 API Request: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
+  console.log(`📤 API Request: ${String(config.method).toUpperCase()} ${config.baseURL}${config.url}`);
   return config;
 });
 
 // Add response interceptor with improved error handling
 api.interceptors.response.use(
-  response => {
+  (response) => {
     console.log(`📥 API Response: ${response.status} from ${response.config.url}`);
     return response;
   },
-  error => {
-    if (error.response) {
-      // Server responded with non-2xx status
-      const { status, data, config } = error.response;
-      const method = config.method?.toUpperCase() || 'UNKNOWN';
-      const url = config.url;
+  (error: unknown) => {
+    // Handle axios errors separately for richer diagnostics
+    if (axios.isAxiosError(error)) {
+      const ae = error as AxiosError;
+      const status = ae.response?.status;
+      const data = ae.response?.data;
+      const config = ae.config;
+      const method = (config?.method || "UNKNOWN").toString().toUpperCase();
+      const url = config?.url;
 
-      console.error(`❌ API Error: ${status} from ${method} ${url}`);
+      if (status) {
+        console.error(`❌ API Error: ${status} from ${method} ${url}`);
+      } else {
+        console.error(`❌ API Error from ${method} ${url}`);
+      }
 
-      // Log detailed error information
       if (data) {
-        if (typeof data === 'object') {
-          if (data.error) console.error('Error message:', data.error);
-          if (data.message) console.error('Message:', data.message);
-          if (data.errors) console.error('Validation errors:', data.errors);
-          console.error('Full error payload:', data);
+        if (typeof data === "object" && data !== null) {
+          const errorMsg = getStringProp(data, "error");
+          const message = getStringProp(data, "message");
+          const validationErrors = getProp(data, "errors");
+
+          if (errorMsg) console.error("Error message:", errorMsg);
+          if (message) console.error("Message:", message);
+          if (validationErrors) console.error("Validation errors:", validationErrors);
+          console.error("Full error payload:", data);
         } else {
-          console.error('Error response:', data);
+          console.error("Error response:", data);
         }
+      } else {
+        console.error("No response data");
       }
 
-      // Add request payload to the log for debugging POST/PUT requests
-      if (['POST', 'PUT', 'PATCH'].includes(method)) {
-        console.error('Request payload:', config.data);
+      if (["POST", "PUT", "PATCH"].includes(method)) {
+        console.error("Request payload:", config?.data);
       }
-    } else if (error.request) {
-      // Request made but no response received
-      console.error('❌ API Error: No response received');
-      console.error('Request details:', {
-        method: error.config?.method?.toUpperCase(),
-        url: error.config?.url,
-        baseURL: error.config?.baseURL
+
+      const derivedMessage =
+        (getStringProp(data, "error") || getStringProp(data, "message")) ||
+        ae.message ||
+        "Unknown API error";
+
+      const apiErr = new ApiError(String(derivedMessage), {
+        statusCode: status,
+        responseData: data,
+        code: ae.code,
+        config,
       });
-      console.error('Network status:', navigator.onLine ? 'Online' : 'Offline');
-    } else {
-      // Error setting up the request
-      console.error('❌ API Error:', error.message);
-      console.error('Error stack:', error.stack);
+
+      return Promise.reject(apiErr);
     }
 
-    // Transform the error to include more context for components
-    const enhancedError = {
-      ...error,
-      isApiError: true,
-      statusCode: error.response?.status,
-      responseData: error.response?.data,
-      errorMessage: error.response?.data?.error ||
-                    error.response?.data?.message ||
-                    error.message ||
-                    'Unknown API error'
-    };
+    // Non-axios error (setup or unexpected)
+    if (error instanceof Error) {
+      console.error("❌ API Error:", error.message);
+      console.error("Error stack:", error.stack);
+      const apiErr = new ApiError(error.message);
+      return Promise.reject(apiErr);
+    }
 
-    return Promise.reject(enhancedError);
+    // Fallback
+    console.error("❌ API Error: unknown error object", error);
+    const apiErr = new ApiError("Unknown API error");
+    return Promise.reject(apiErr);
   }
 );
 
