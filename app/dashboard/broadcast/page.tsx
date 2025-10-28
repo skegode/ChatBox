@@ -358,6 +358,28 @@ function TemplateMessageInput({
   const templateVariables = selectedTemplate ? parseTemplateVariables(selectedTemplate) : [];
   const templatePreview = selectedTemplate ? getTemplatePreviewText(selectedTemplate) : {};
 
+  // Shared variables that apply to all recipients unless a contact overrides them
+  const [sharedVariables, setSharedVariables] = useState<Record<string, string>>({});
+
+  // Initialize or preserve shared variables when template changes
+  useEffect(() => {
+    if (!selectedTemplate) {
+      setSharedVariables({});
+      return;
+    }
+
+    setSharedVariables((prev) => {
+      const init: Record<string, string> = {};
+      templateVariables
+        .slice()
+        .sort((a, b) => a.index - b.index)
+        .forEach((v) => {
+          init[`var_${v.index}`] = prev[`var_${v.index}`] ?? "";
+        });
+      return init;
+    });
+  }, [selectedTemplate, templateVariables]);
+
   // Effect to handle template and language selection
   useEffect(() => {
     if (availableLanguages.length > 0 && !languageCode) {
@@ -413,7 +435,8 @@ function TemplateMessageInput({
     const recipients: TemplateRecipient[] = contacts.map(contact => {
       // Get variables for this contact, or use empty strings
       const variables = templateVariables.map(v => {
-        return contact.variables?.[`var_${v.index}`] || '';
+        // priority: contact-specific -> shared -> empty
+        return contact.variables?.[`var_${v.index}`] ?? sharedVariables[`var_${v.index}`] ?? '';
       });
       
       return {
@@ -499,14 +522,20 @@ function TemplateMessageInput({
     if (!text) return '';
     
     let previewText = text;
+
+    // Replace ALL occurrences of each placeholder. Use contact-specific -> shared -> placeholder.
     templateVariables.forEach((v) => {
       const placeholder = v.placeholder;
-      const replacement = contactVars ? (contactVars[`var_${v.index}`] || `<${v.index}>`) : `<${v.index}>`;
-      previewText = previewText.replace(placeholder, replacement);
+      const replacement = (contactVars && contactVars[`var_${v.index}`]) ??
+                          sharedVariables[`var_${v.index}`] ??
+                          `<${v.index}>`;
+      // split/join is simpler and avoids issues with special regex characters
+      previewText = previewText.split(placeholder).join(replacement);
     });
-    
+
     return previewText;
   };
+
 
   return (
     <div className="d-flex flex-column gap-3">
@@ -563,21 +592,21 @@ function TemplateMessageInput({
           {templatePreview.header && (
             <div className="mb-2">
               <small className="text-muted">HEADER</small>
-              <div className="fw-bold">{getPreviewText(templatePreview.header)}</div>
+              <div className="fw-bold" style={{ whiteSpace: 'pre-wrap' }}>{getPreviewText(templatePreview.header)}</div>
             </div>
           )}
           
           {templatePreview.body && (
             <div className="mb-2">
               <small className="text-muted">BODY</small>
-              <div>{getPreviewText(templatePreview.body)}</div>
+              <div style={{ whiteSpace: 'pre-wrap' }}>{getPreviewText(templatePreview.body)}</div>
             </div>
           )}
           
           {templatePreview.footer && (
             <div>
               <small className="text-muted">FOOTER</small>
-              <div className="text-muted font-italic">{templatePreview.footer}</div>
+              <div className="text-muted font-italic" style={{ whiteSpace: 'pre-wrap' }}>{getPreviewText(templatePreview.footer)}</div>
             </div>
           )}
         </div>
@@ -585,6 +614,30 @@ function TemplateMessageInput({
 
       {selectedTemplate && templateVariables.length > 0 && (
         <>
+          {/* Shared variables apply to all recipients unless overridden per-contact */}
+          <div className="border rounded p-3 mb-3 bg-light">
+            <h6 className="mb-2">Shared Variables (apply to all recipients)</h6>
+            <div className="row g-2">
+              {templateVariables
+                .slice()
+                .sort((a, b) => a.index - b.index)
+                .map((v) => (
+                  <div key={`shared-var-${v.index}`} className="col-md-4 mb-2">
+                    <label className="form-label small">Variable {v.index}</label>
+                    <input
+                      type="text"
+                      className="form-control form-control-sm"
+                      value={sharedVariables[`var_${v.index}`] ?? ''}
+                      onChange={(e) =>
+                        setSharedVariables(prev => ({ ...prev, [`var_${v.index}`]: e.target.value }))
+                      }
+                      placeholder={`Shared value for {{${v.index}}}`}
+                    />
+                  </div>
+                ))}
+            </div>
+            <small className="text-muted d-block mt-2">Enter values here to apply to all recipients unless overridden per-contact below.</small>
+          </div>
           <div className="d-flex justify-content-between align-items-center">
             <h6 className="mb-0">Personalization</h6>
             <div className="d-flex gap-2">
