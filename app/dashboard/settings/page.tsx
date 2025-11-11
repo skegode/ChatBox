@@ -1,7 +1,52 @@
+"use client";
+import React, { useState, useEffect } from "react";
 import ProtectedRoute from '../../../components/ProtectedRoute';
+import api from '../../../lib/api';
 import { PERMISSIONS } from '../../../lib/permissions';
 
 export default function SettingsPage() {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [agentActive, setAgentActive] = useState<boolean | null>(null);
+
+  // Fetch current status on mount
+  useEffect(() => {
+    let mounted = true;
+    async function fetchStatus() {
+      setLoading(true);
+      setError(null);
+      try {
+        const resp = await api.get('/api/ai-agent/status');
+        if (mounted) setAgentActive(Boolean(resp?.data?.isActive));
+      } catch (err: any) {
+        if (mounted) setError(err?.message || "Failed to fetch agent status");
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+    fetchStatus();
+    return () => { mounted = false; };
+  }, []);
+
+  async function toggleAgent() {
+    if (agentActive === null) return;
+    setLoading(true);
+    setError(null);
+    try {
+      if (agentActive) {
+        await api.post('/api/ai-agent/deactivate');
+        setAgentActive(false);
+      } else {
+        await api.post('/api/ai-agent/activate');
+        setAgentActive(true);
+      }
+    } catch (err: any) {
+      setError(err?.message || "Failed to update agent status");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <ProtectedRoute requiredPermissions={['adminOnly']} requiredPolicy={PERMISSIONS.POLICY_ADMIN_ONLY}>
       <div className="w-100 overflow-hidden position-relative">
@@ -24,16 +69,39 @@ export default function SettingsPage() {
                         Manage your application settings here.
                       </p>
                     </div>
-                    
-                    {/* Settings sections */}
+
+                    {/* AI Agent controls */}
                     <div className="mb-4">
                       <div className="card bg-light border-0">
                         <div className="card-body text-center py-4">
-                          <i className="ri-time-line fs-4 text-muted mb-2 d-block"></i>
-                          <h6 className="text-muted mb-1">Settings Configuration</h6>
-                          <p className="text-muted small mb-0">
-                            Settings options coming soon...
+                          <i className="ri-robot-line fs-4 text-muted mb-2 d-block"></i>
+                          <h6 className="text-muted mb-1">Customer Service AI — Henry</h6>
+                          <p className="text-muted small mb-3">
+                            Activate or deactivate the Customer Service AI agent.
                           </p>
+
+                          {agentActive === null ? (
+                            <div className="mb-2"><small className="text-muted">{loading ? "Loading status..." : "Status: unknown"}</small></div>
+                          ) : (
+                            <div className="mb-2">
+                              <small className={agentActive ? "text-success" : "text-danger"}>
+                                Status: {agentActive ? "Active" : "Inactive"}
+                              </small>
+                            </div>
+                          )}
+
+                          <div className="d-flex justify-content-center gap-2">
+                            <button
+                              className={agentActive ? "btn btn-danger" : "btn btn-success"}
+                              onClick={toggleAgent}
+                              disabled={loading || agentActive === null}
+                              aria-label={agentActive ? "Deactivate Henry" : "Activate Henry"}
+                            >
+                              {loading ? "Working..." : (agentActive ? "Turn Off" : "Turn On")}
+                            </button>
+                          </div>
+
+                          {error && <div className="mt-3 text-danger small">{error}</div>}
                         </div>
                       </div>
                     </div>
