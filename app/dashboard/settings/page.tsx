@@ -4,6 +4,20 @@ import ProtectedRoute from '../../../components/ProtectedRoute';
 import api from '../../../lib/api';
 import { PERMISSIONS } from '../../../lib/permissions';
 
+interface AgentStatusPayload {
+  isActive?: boolean;
+}
+
+function getErrorMessage(err: unknown): string {
+  if (typeof err === 'string') return err;
+  if (err instanceof Error) return err.message;
+  try {
+    return JSON.stringify(err) ?? 'Unknown error';
+  } catch {
+    return 'Unknown error';
+  }
+}
+
 export default function SettingsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -16,10 +30,10 @@ export default function SettingsPage() {
       setLoading(true);
       setError(null);
       try {
-        const resp = await api.get('/api/ai-agent/status');
-        if (mounted) setAgentActive(Boolean(resp?.data?.isActive));
-      } catch (err: any) {
-        if (mounted) setError(err?.message || "Failed to fetch agent status");
+        const resp = await api.get<AgentStatusPayload>('/api/ai-agent/status');
+        if (mounted) setAgentActive(Boolean(resp.data?.isActive));
+      } catch (err: unknown) {
+        if (mounted) setError(getErrorMessage(err) || "Failed to fetch agent status");
       } finally {
         if (mounted) setLoading(false);
       }
@@ -40,8 +54,8 @@ export default function SettingsPage() {
         await api.post('/api/ai-agent/activate');
         setAgentActive(true);
       }
-    } catch (err: any) {
-      setError(err?.message || "Failed to update agent status");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err) || "Failed to update agent status");
     } finally {
       setLoading(false);
     }
@@ -75,7 +89,7 @@ export default function SettingsPage() {
                       <div className="card bg-light border-0">
                         <div className="card-body text-center py-4">
                           <i className="ri-robot-line fs-4 text-muted mb-2 d-block"></i>
-                          <h6 className="text-muted mb-1">Customer Service AI — Henry</h6>
+                          <h6 className="text-muted mb-1">Customer Service AI</h6>
                           <p className="text-muted small mb-3">
                             Activate or deactivate the Customer Service AI agent.
                           </p>
@@ -95,7 +109,7 @@ export default function SettingsPage() {
                               className={agentActive ? "btn btn-danger" : "btn btn-success"}
                               onClick={toggleAgent}
                               disabled={loading || agentActive === null}
-                              aria-label={agentActive ? "Deactivate Henry" : "Activate Henry"}
+                              aria-label={agentActive ? "Deactivate AI Agent" : "Activate AI Agent"}
                             >
                               {loading ? "Working..." : (agentActive ? "Turn Off" : "Turn On")}
                             </button>
@@ -155,3 +169,4 @@ export default function SettingsPage() {
     </ProtectedRoute>
   );
 }
+
