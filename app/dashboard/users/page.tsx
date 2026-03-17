@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
+// ...existing code...
 import Link from 'next/link';
 import api from '@/lib/api';
 import { formatDate } from '@/lib/utils/formatDate';
@@ -30,7 +31,56 @@ type Department = {
   name: string | null;
 };
 
+
 export default function UsersPage() {
+  // delete modal state
+  const [deletingUser, setDeletingUser] = useState<UserItem | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const openDelete = (u: UserItem) => {
+    setDeletingUser(u);
+    setDeleteError(null);
+  };
+
+  const closeDelete = () => {
+    setDeletingUser(null);
+    setDeleteError(null);
+    setDeleteLoading(false);
+  };
+
+  const confirmDelete = async () => {
+    if (!deletingUser) return;
+    setDeleteLoading(true);
+    setDeleteError(null);
+    const deleteUrl = `/api/Users/${deletingUser.id}`;
+    console.log(`🗑️ Attempting DELETE via proxy: ${deleteUrl} (User ID: ${deletingUser.id}, Name: ${deletingUser.firstName} ${deletingUser.otherName || ''})`);
+    try {
+      const token = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null;
+      const res = await fetch(deleteUrl, {
+        method: 'DELETE',
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          'Accept': 'application/json',
+        },
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw { statusCode: res.status, errorMessage: errData?.error || `Delete failed (${res.status})`, responseData: errData };
+      }
+      console.log(`✅ DELETE successful: Status ${res.status}`, res.data);
+      setUsers((prev) => prev ? prev.filter((u) => u.id !== deletingUser.id) : prev);
+      closeDelete();
+    } catch (err: unknown) {
+      const status = (err as { statusCode?: number }).statusCode;
+      const responseData = (err as { responseData?: unknown }).responseData;
+      console.error(`❌ DELETE failed: Status ${status}`, { url: deleteUrl, responseData, err });
+      const msg = (err as { errorMessage?: string }).errorMessage || (err as { message?: string }).message || 'Failed to delete user';
+      setDeleteError(`${msg} (HTTP ${status || 'unknown'})`);
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   const [users, setUsers] = useState<UserItem[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -234,7 +284,8 @@ export default function UsersPage() {
                       <td>{u.dateCreated ? formatDate(new Date(u.dateCreated)) : '—'}</td>
                       <td>
                         <button className="btn btn-sm btn-outline-secondary me-2" onClick={() => openEdit(u)}>Edit</button>
-                        <Link href={`/dashboard/users/${u.id}`} className="btn btn-sm btn-outline-primary">View</Link>
+                        <Link href={`/dashboard/users/${u.id}`} className="btn btn-sm btn-outline-primary me-2">View</Link>
+                        <button className="btn btn-sm btn-outline-danger" onClick={() => openDelete(u)}>Delete</button>
                       </td>
                     </tr>
                   ))}
@@ -245,6 +296,33 @@ export default function UsersPage() {
             <div className="p-4 text-center text-muted">No users found.</div>
           )}
         </div>
+
+        {/* Delete modal */}
+        {deletingUser && (
+          <>
+            <div className="modal-backdrop fade show"></div>
+            <div className="modal fade show" style={{ display: 'block' }} tabIndex={-1} role="dialog">
+              <div className="modal-dialog" role="document">
+                <div className="modal-content">
+                  <div className="modal-header">
+                    <h5 className="modal-title">Delete user</h5>
+                    <button className="btn-close" onClick={closeDelete} />
+                  </div>
+                  <div className="modal-body">
+                    {deleteError && <div className="alert alert-danger">{deleteError}</div>}
+                    <p>Are you sure you want to delete user <strong>{(deletingUser.firstName || '') + (deletingUser.otherName ? ` ${deletingUser.otherName}` : '')}</strong>?</p>
+                  </div>
+                  <div className="modal-footer">
+                    <button type="button" className="btn btn-secondary" onClick={closeDelete} disabled={deleteLoading}>Cancel</button>
+                    <button type="button" className="btn btn-danger" onClick={confirmDelete} disabled={deleteLoading}>
+                      {deleteLoading ? 'Deleting...' : 'Delete'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Edit modal - same as before */}
         {editingUser && (

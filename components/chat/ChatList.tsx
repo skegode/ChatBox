@@ -17,6 +17,11 @@ export type Conversation = {
   lastMessageTime?: string | Date | null;
   unreadCount?: number;
   messageCount?: number;
+  lastMessageDirection?: 'incoming' | 'outgoing' | null;
+  lastMessageStatus?: 'sent' | 'delivered' | 'read' | null;
+  // Alternative field names from backend
+  isLastMessageIncoming?: boolean | null;
+  lastMessageIsIncoming?: boolean | null;
 };
 
 export default function ChatList() {
@@ -39,6 +44,7 @@ export default function ChatList() {
 
     try {
       const response = await api.get("api/Messages");
+      console.log("API Response - first chat:", response.data?.[0]); // Debug: check available fields
       if (Array.isArray(response.data)) setChats(response.data);
       else if (showLoading) setChats([]);
     } catch (err: unknown) {

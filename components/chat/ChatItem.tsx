@@ -4,6 +4,7 @@
 // ChatItem component to display individual chat in the list
 
 import React from 'react';
+import { Check, CheckCheck } from 'lucide-react';
 import type { Conversation } from './ChatList';
 import Avatar from '../ui/Avatar';
 
@@ -66,6 +67,20 @@ export default function ChatItem({ chat }: { chat: Conversation }) {
   const lastAt = chat?.lastMessageTime ?? null;
   const unread = Number(chat?.unreadCount ?? 0);
 
+  // Determine if the last message was outgoing (sent by us)
+  // Priority: explicit fields from API, fallback to heuristic (unreadCount === 0 means we likely sent last message)
+  const isLastMessageOutgoing = 
+    chat?.lastMessageDirection === 'outgoing' ||
+    chat?.isLastMessageIncoming === false ||
+    chat?.lastMessageIsIncoming === false ||
+    (chat?.lastMessageDirection === undefined && 
+     chat?.isLastMessageIncoming === undefined && 
+     chat?.lastMessageIsIncoming === undefined &&
+     unread === 0);
+
+  // Get message status (default to 'delivered' for outgoing messages without explicit status)
+  const lastMessageStatus = chat?.lastMessageStatus ?? 'delivered';
+
   // Type guard to check for avatar fields
   const hasContactAvatarUrl = (c: Conversation): c is ConversationWithAvatar =>
     'contactAvatarUrl' in c && typeof (c as ConversationWithAvatar).contactAvatarUrl === 'string';
@@ -88,7 +103,20 @@ export default function ChatItem({ chat }: { chat: Conversation }) {
       </div>
       <div className="flex-grow-1 overflow-hidden">
         <h5 className="text-truncate font-size-15 mb-1">{name}</h5>
-        <p className="chat-user-message text-truncate mb-0">{truncateText(chat?.lastMessageText ?? 'No messages yet', 25)}</p>
+        <p className="chat-user-message text-truncate mb-0 d-flex align-items-center">
+          {isLastMessageOutgoing && (
+            <span className="me-1 d-inline-flex align-items-center">
+              {lastMessageStatus === 'read' ? (
+                <CheckCheck size={14} style={{ color: '#3b82f6' }} />
+              ) : lastMessageStatus === 'delivered' ? (
+                <CheckCheck size={14} style={{ color: '#9ca3af' }} />
+              ) : (
+                <Check size={14} style={{ color: '#9ca3af' }} />
+              )}
+            </span>
+          )}
+          <span className="text-truncate">{truncateText(chat?.lastMessageText ?? 'No messages yet', 25)}</span>
+        </p>
       </div>
       <div className="font-size-11">{formatDate(lastAt)}</div>
       {unread > 0 && (

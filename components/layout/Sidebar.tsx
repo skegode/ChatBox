@@ -8,14 +8,15 @@ import { useAuth } from '../providers/AuthProvider';
 
 
 export default function Sidebar() {
-  const [activeSection, setActiveSection] = useState<'chats' | 'users' | 'assignments' | 'settings' | 'merchants' | 'prospects' | 'influencers'>('chats');
+  const [activeSection, setActiveSection] = useState<'chats' | 'contacts' | 'users' | 'assignments' | 'settings' | 'merchants' | 'prospects' | 'influencers'>('chats');
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const pathname = usePathname();
   const router = useRouter();
   const { logout, user } = useAuth();
 
   // hide secondary for pages that should not show the secondary menu/chat list  
-  const hideSecondary = pathname?.toLowerCase().startsWith('/dashboard/settings');
+  const hideSecondary = pathname?.toLowerCase().startsWith('/dashboard/settings') || 
+                        pathname?.toLowerCase().startsWith('/dashboard/contacts');
 
   const activeClass = "nav-link active";
   const inactiveClass = "nav-link";
@@ -51,6 +52,8 @@ export default function Sidebar() {
       newActive = 'chats';
     } else if (!afterDashboard || afterDashboard === 'chats') {
       newActive = 'chats';
+    } else if (afterDashboard === 'contacts') {
+      newActive = 'contacts';
     } else if (['users','assignments','settings','merchants','prospects','influencers', 'selfonboardedborrowers'].includes(afterDashboard)) {
       if (afterDashboard === 'selfonboardedborrowers') {
         newActive = 'prospects';
@@ -168,6 +171,9 @@ export default function Sidebar() {
           </div>
         );
 
+      case 'contacts':
+        return null; // Contacts page has its own full-width content
+
       // default to chat list for other sections (including dashboard root)
       default:
         return (
@@ -199,6 +205,15 @@ export default function Sidebar() {
                 className={`${activeSection === 'chats' ? activeClass : inactiveClass}`}
               >
                 <i className="ri-message-3-line" />
+              </button>
+            </Link>
+
+            <Link href="/dashboard/contacts" className="nav-item" data-bs-toggle="tooltip" data-bs-trigger="hover" data-bs-placement="right" aria-label="Contacts" title='Contacts'>
+              <button
+                onClick={() => { setActiveSection('contacts'); setOpenDropdown(null); }}
+                className={`${activeSection === 'contacts' ? activeClass : inactiveClass}`}
+              >
+                <i className="ri-contacts-book-line" />
               </button>
             </Link>
             
@@ -244,6 +259,18 @@ export default function Sidebar() {
                   className={`${activeSection === 'influencers' ? activeClass : inactiveClass}`}
                 >
                   <i className="ri-group-3-line" />
+                </button>
+              </Link>
+            )}
+
+
+            {isAdmin && (
+              <Link href="/dashboard/stats" data-bs-toggle="tooltip" data-bs-trigger="hover" data-bs-placement="right" aria-label="Stats" title="Messaging Stats" className="nav-item">
+                <button
+                  onClick={() => { setActiveSection('stats'); setOpenDropdown(null); }}
+                  className={`${activeSection === 'stats' ? activeClass : inactiveClass}`}
+                >
+                  <i className="ri-bar-chart-2-line" />
                 </button>
               </Link>
             )}

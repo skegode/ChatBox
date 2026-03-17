@@ -371,12 +371,13 @@ export default function MessageBubble({
                 {format(safeTimestamp, "HH:mm")}
               </span>
               {isOutgoing && (
-                <span className="ml-1" aria-hidden>
-                  {message.status === "delivered" ||
-                  message.status === "read" ? (
-                    <CheckCheck size={14} />
+                <span className="ms-1" aria-hidden>
+                  {message.status === "read" ? (
+                    <CheckCheck size={14} className="text-primary" style={{ color: '#3b82f6' }} />
+                  ) : message.status === "delivered" ? (
+                    <CheckCheck size={14} style={{ color: '#9ca3af' }} />
                   ) : (
-                    <Check size={14} />
+                    <Check size={14} style={{ color: '#9ca3af' }} />
                   )}
                 </span>
               )}
