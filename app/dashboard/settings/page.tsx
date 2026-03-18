@@ -33,7 +33,13 @@ export default function SettingsPage() {
         const resp = await api.get<AgentStatusPayload>('/api/ai-agent/status');
         if (mounted) setAgentActive(Boolean(resp.data?.isActive));
       } catch (err: unknown) {
-        if (mounted) setError(getErrorMessage(err) || "Failed to fetch agent status");
+        // 404 means endpoint not available yet — default to inactive
+        const status = (err as { statusCode?: number })?.statusCode;
+        if (status === 404) {
+          if (mounted) setAgentActive(false);
+        } else {
+          if (mounted) setError(getErrorMessage(err) || "Failed to fetch agent status");
+        }
       } finally {
         if (mounted) setLoading(false);
       }

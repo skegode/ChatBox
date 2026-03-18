@@ -48,7 +48,7 @@ export default function AddMerchantPage() {
 
   return (
     <ProtectedRoute requiredPermissions={['adminOnly']} requiredPolicy={PERMISSIONS.POLICY_VIEW_USERS}>
-      <div className="bg-white p-4">
+      <div className="p-4">
         <div className="d-flex justify-content-between align-items-center">
           <h4 className="mb-0"><i className="ri-function-add-line me-2" />New Merchant</h4> 
           <Link

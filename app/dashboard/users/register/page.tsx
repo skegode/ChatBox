@@ -108,7 +108,7 @@ export default function RegisterPage() {
 
   return (
     <ProtectedRoute requiredPolicy={PERMISSIONS.POLICY_ADMIN_ONLY}>
-      <div className="bg-white p-4">
+      <div className="p-4">
         <div className="d-flex justify-content-between align-items-center">
           <h4 className="mb-0"><i className="ri-group-line me-2" />New User</h4>
           <Link

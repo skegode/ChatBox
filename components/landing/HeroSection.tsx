@@ -5,7 +5,7 @@ import Link from 'next/link';
 export default function HeroSection() {
   return (
     <>
-      <nav className="navbar navbar-expand-lg fixed-top navbar-custom sticky sticky-dark" id="navbar">
+      <nav className="navbar navbar-expand-lg fixed-top navbar-custom sticky sticky-dark landing-navbar" id="navbar">
         <div className="container">
           <a className="navbar-brand logo">
             <img src="images/logo.png" alt="" className="logo-dark" height={60} />
@@ -17,34 +17,31 @@ export default function HeroSection() {
           <div className="collapse navbar-collapse" id="navbarCollapse">
             <ul className="navbar-nav mx-auto navbar-center" id="navbar-navlist">
               <li className="nav-item">
-                <a data-scroll href="#home" className="nav-link">Home</a>
+                <a data-scroll href="#home" className="nav-link landing-nav-link">Home</a>
               </li>
               <li className="nav-item">
-                <a data-scroll href="#features" className="nav-link">Features</a>
+                <a data-scroll href="#features" className="nav-link landing-nav-link">Features</a>
               </li>
               <li className="nav-item">
-                <a data-scroll href="#blog" className="nav-link">Guide</a>
+                <a data-scroll href="#blog" className="nav-link landing-nav-link">Guide</a>
               </li>
               <li className="nav-item">
-                <a data-scroll href="#contact" className="nav-link">Support</a>
+                <a data-scroll href="#contact" className="nav-link landing-nav-link">Support</a>
               </li>
             </ul>
             <ul className="navbar-nav navbar-center">
               <li className="nav-item">
                 <Link href="/login" className="btn btn-primary">Login</Link>
               </li>
-              {/* <li className="nav-item">
-                <a href="/login" className="nav-link">Register</a>
-              </li> */}
             </ul>
           </div>
         </div>
       </nav>
-      <section className="hero-1-bg" style={{backgroundImage: 'url(images/hero-1-bg-img.png)'}} id="home">
+      <section className="hero-1-bg landing-hero" style={{backgroundImage: 'url(images/hero-1-bg-img.png)'}} id="home">
         <div className="container">
           <div className="row align-items-center justify-content-center">
             <div className="col-lg-6">
-              <h1 className="hero-1-title fw-bold text-shadow mb-4">Welcome to <span className='text-primary'>Chatbox</span></h1>
+              <h1 className="hero-1-title fw-bold text-shadow mb-4 landing-heading">Welcome to <span className="landing-accent">Chatbox</span></h1>
               <div className="w-75 mb-5 mb-lg-0">
                 <p className="text-muted mb-1 pb-5 font-size-17">Turn WhatsApp into your company’s customer support hub. All your chats, one dashboard, faster replies.</p>
                 <p>Manage all client conversations from your company’s WhatsApp number in one secure, easy-to-use platform.</p>

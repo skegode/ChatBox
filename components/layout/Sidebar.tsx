@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import ChatList from '../chat/ChatList';
 import { useAuth } from '../providers/AuthProvider';
+import { useTheme } from '../providers/ThemeProvider';
 
 
 export default function Sidebar() {
@@ -13,6 +14,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { logout, user } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   // hide secondary for pages that should not show the secondary menu/chat list  
   const hideSecondary = pathname?.toLowerCase().startsWith('/dashboard/settings') || 
@@ -294,6 +296,20 @@ export default function Sidebar() {
               <Link href="/dashboard/settings" data-bs-toggle="tooltip" data-bs-trigger="hover" data-bs-placement="right" aria-label="Settings" title="Settings" className="nav-link light-dark-mode">
                 <i className="ri-settings-2-line" />
               </Link>
+            </li>
+            <li className="nav-item">
+              <a
+                className="nav-link light-dark-mode"
+                data-bs-toggle="tooltip"
+                data-bs-trigger="hover"
+                data-bs-placement="right"
+                aria-label={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+                title={theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+                href="#"
+                onClick={(e) => { e.preventDefault(); toggleTheme(); }}
+              >
+                <i className={theme === 'dark' ? 'ri-sun-line' : 'ri-moon-line'} />
+              </a>
             </li>
             <li className="nav-item">
               <a className="nav-link light-dark-mode" data-bs-toggle="tooltip" data-bs-trigger="hover" data-bs-placement="right" aria-label="Logout" href="#" onClick={handleLogout} title="Logout">

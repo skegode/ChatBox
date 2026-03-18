@@ -194,6 +194,11 @@ export default function ChatPage() {
           api
             .get(`api/Messages/status`, { params: { messageId: id } })
             .then((r) => ({ id, data: r.data }))
+            .catch((err) => {
+              // Silently ignore 404s — endpoint may not be available
+              if (err?.statusCode === 404 || err?.response?.status === 404) return { id, data: null };
+              throw err;
+            })
         )
       );
 

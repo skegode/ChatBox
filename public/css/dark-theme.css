@@ -1,0 +1,961 @@
+/* ============================================================
+   DARK NAVY THEME — matches the Stats module aesthetic
+   Background: #0a1628 → #132e54  |  Glassmorphism panels
+   ============================================================ */
+
+/* ---------- Root / Body ---------- */
+body {
+  background: linear-gradient(145deg, #0a1628 0%, #0f2847 40%, #132e54 70%, #0d1f3c 100%) !important;
+  color: #e2eafc !important;
+  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif !important;
+  min-height: 100vh;
+}
+
+/* ---------- Scrollbars ---------- */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: rgba(10,22,40,0.4); }
+::-webkit-scrollbar-thumb { background: rgba(96,165,250,0.25); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(96,165,250,0.4); }
+
+/* ---------- Links ---------- */
+a { color: #60a5fa; }
+a:hover { color: #93bbfd; }
+
+/* ============================================================
+   SIDEBAR
+   ============================================================ */
+.side-menu {
+  background: linear-gradient(180deg, #0a1628 0%, #0d1f3c 100%) !important;
+  border-right: 1px solid rgba(96,165,250,0.1) !important;
+}
+.side-menu .navbar-brand-box {
+  border-bottom: 1px solid rgba(96,165,250,0.08) !important;
+}
+.side-menu-nav .nav-link {
+  color: #7da8d9 !important;
+  transition: all 0.2s ease;
+}
+.side-menu-nav .nav-link:hover {
+  color: #60a5fa !important;
+  background: rgba(37,99,235,0.1) !important;
+}
+.side-menu-nav .nav-link.active {
+  color: #ffffff !important;
+  background: rgba(37,99,235,0.2) !important;
+}
+
+/* Chat left sidebar panel */
+.chat-leftsidebar {
+  background: linear-gradient(180deg, #0c1e38 0%, #0f2644 100%) !important;
+  border-right: 1px solid rgba(96,165,250,0.08) !important;
+}
+.chat-leftsidebar h4,
+.chat-leftsidebar h5,
+.chat-leftsidebar h6 {
+  color: #e2eafc !important;
+}
+.chat-leftsidebar .text-muted {
+  color: #7da8d9 !important;
+}
+.chat-leftsidebar a {
+  color: #bfdbfe !important;
+}
+.chat-leftsidebar a:hover {
+  color: #ffffff !important;
+  background: rgba(37,99,235,0.08) !important;
+}
+.chat-leftsidebar .border-top {
+  border-color: rgba(96,165,250,0.1) !important;
+}
+
+/* ============================================================
+   LAYOUT WRAPPER
+   ============================================================ */
+.layout-wrapper {
+  background: transparent !important;
+}
+.user-chat {
+  background: transparent !important;
+}
+
+/* ============================================================
+   TOPBAR / HEADER BARS
+   ============================================================ */
+.user-chat-topbar,
+.p-3.border-bottom,
+.p-lg-4.border-bottom,
+.border-bottom {
+  border-color: rgba(96,165,250,0.12) !important;
+}
+.user-chat-topbar {
+  background: linear-gradient(135deg, rgba(37,99,235,0.1) 0%, rgba(14,45,92,0.2) 100%) !important;
+  backdrop-filter: blur(20px);
+}
+
+/* ============================================================
+   CARDS — Glassmorphism
+   ============================================================ */
+.card {
+  background: rgba(15,40,71,0.6) !important;
+  backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(96,165,250,0.12) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.2) !important;
+  color: #e2eafc !important;
+}
+.card-body {
+  color: #e2eafc !important;
+}
+.card-header {
+  background: rgba(37,99,235,0.08) !important;
+  border-bottom: 1px solid rgba(96,165,250,0.1) !important;
+  color: #e2eafc !important;
+}
+.card .bg-light,
+.card .bg-light-subtle {
+  background: rgba(10,22,40,0.5) !important;
+  color: #bfdbfe !important;
+}
+
+/* ============================================================
+   TABLES — Dark themed
+   ============================================================ */
+.table {
+  color: #c7d7f0 !important;
+  --bs-table-bg: transparent !important;
+  --bs-table-striped-bg: rgba(37,99,235,0.06) !important;
+  --bs-table-hover-bg: rgba(37,99,235,0.1) !important;
+  border-color: rgba(96,165,250,0.08) !important;
+}
+.table thead th,
+.table-light th,
+.table-light {
+  background: rgba(37,99,235,0.15) !important;
+  color: #93bbfd !important;
+  border-color: rgba(96,165,250,0.1) !important;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  letter-spacing: 0.4px;
+}
+.table tbody tr {
+  border-color: rgba(96,165,250,0.06) !important;
+  transition: background 0.15s ease;
+}
+.table tbody tr:hover {
+  background: rgba(37,99,235,0.08) !important;
+}
+.table tbody td {
+  border-color: rgba(96,165,250,0.06) !important;
+  vertical-align: middle;
+}
+.table-striped > tbody > tr:nth-of-type(odd) > * {
+  --bs-table-bg-type: rgba(37,99,235,0.04) !important;
+  color: #c7d7f0 !important;
+}
+.table-responsive {
+  border-radius: 12px;
+  overflow: hidden;
+}
+.sticky-top {
+  background: rgba(37,99,235,0.15) !important;
+}
+
+/* ============================================================
+   FORMS — Dark inputs
+   ============================================================ */
+.form-control,
+.form-select {
+  background: rgba(10,22,40,0.8) !important;
+  border: 1px solid rgba(96,165,250,0.2) !important;
+  color: #bfdbfe !important;
+  border-radius: 8px !important;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.form-control:focus,
+.form-select:focus {
+  background: rgba(10,22,40,0.9) !important;
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.3) !important;
+  color: #e2eafc !important;
+}
+.form-control::placeholder {
+  color: rgba(125,168,217,0.5) !important;
+}
+.form-control:disabled,
+.form-control[readonly] {
+  background: rgba(10,22,40,0.5) !important;
+  color: #7da8d9 !important;
+  opacity: 0.7;
+}
+.form-label {
+  color: #93bbfd !important;
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+.form-check-label {
+  color: #bfdbfe !important;
+}
+.form-check-input {
+  background-color: rgba(10,22,40,0.8) !important;
+  border-color: rgba(96,165,250,0.3) !important;
+}
+.form-check-input:checked {
+  background-color: #3b82f6 !important;
+  border-color: #3b82f6 !important;
+}
+.input-group-text {
+  background: rgba(37,99,235,0.1) !important;
+  border: 1px solid rgba(96,165,250,0.2) !important;
+  color: #7da8d9 !important;
+}
+.bg-light-subtle {
+  background: rgba(10,22,40,0.6) !important;
+}
+
+/* ============================================================
+   BUTTONS
+   ============================================================ */
+.btn-primary {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+  border: 1px solid rgba(96,165,250,0.3) !important;
+  color: #ffffff !important;
+  border-radius: 8px !important;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+.btn-primary:hover {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+  box-shadow: 0 4px 16px rgba(37,99,235,0.35) !important;
+  transform: translateY(-1px);
+}
+.btn-success {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
+  border: 1px solid rgba(52,211,153,0.3) !important;
+  color: #ffffff !important;
+  border-radius: 8px !important;
+}
+.btn-success:hover {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  box-shadow: 0 4px 16px rgba(5,150,105,0.35) !important;
+}
+.btn-danger {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%) !important;
+  border: 1px solid rgba(248,113,113,0.3) !important;
+  color: #ffffff !important;
+  border-radius: 8px !important;
+}
+.btn-danger:hover {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+}
+.btn-secondary {
+  background: rgba(15,40,71,0.8) !important;
+  border: 1px solid rgba(96,165,250,0.2) !important;
+  color: #bfdbfe !important;
+  border-radius: 8px !important;
+}
+.btn-secondary:hover {
+  background: rgba(37,99,235,0.15) !important;
+  border-color: rgba(96,165,250,0.3) !important;
+  color: #e2eafc !important;
+}
+.btn-light {
+  background: rgba(15,40,71,0.5) !important;
+  border: 1px solid rgba(96,165,250,0.15) !important;
+  color: #bfdbfe !important;
+}
+.btn-light:hover {
+  background: rgba(37,99,235,0.12) !important;
+  color: #e2eafc !important;
+}
+.btn-outline-primary {
+  border-color: rgba(59,130,246,0.4) !important;
+  color: #60a5fa !important;
+  background: transparent !important;
+}
+.btn-outline-primary:hover {
+  background: rgba(59,130,246,0.15) !important;
+  color: #93bbfd !important;
+}
+.btn-outline-secondary {
+  border-color: rgba(96,165,250,0.2) !important;
+  color: #93bbfd !important;
+  background: transparent !important;
+}
+.btn-outline-secondary:hover {
+  background: rgba(37,99,235,0.1) !important;
+  color: #bfdbfe !important;
+}
+.btn-outline-danger {
+  border-color: rgba(239,68,68,0.4) !important;
+  color: #f87171 !important;
+  background: transparent !important;
+}
+.btn-outline-danger:hover {
+  background: rgba(239,68,68,0.15) !important;
+  color: #fca5a5 !important;
+}
+.btn-link {
+  color: #60a5fa !important;
+}
+.btn-link:hover {
+  color: #93bbfd !important;
+}
+
+/* Nav btn in chat header */
+.nav-btn {
+  color: #bfdbfe !important;
+}
+.nav-btn:hover {
+  color: #ffffff !important;
+}
+
+/* ============================================================
+   MODALS — Dark glassmorphism
+   ============================================================ */
+.modal-content {
+  background: linear-gradient(145deg, #0f2644 0%, #132e54 100%) !important;
+  border: 1px solid rgba(96,165,250,0.15) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 8px 48px rgba(0,0,0,0.5) !important;
+  color: #e2eafc !important;
+}
+.modal-header {
+  border-bottom: 1px solid rgba(96,165,250,0.1) !important;
+}
+.modal-header .modal-title {
+  color: #e2eafc !important;
+}
+.modal-footer {
+  border-top: 1px solid rgba(96,165,250,0.1) !important;
+}
+.modal-backdrop.show {
+  background-color: rgba(5,10,20,0.7) !important;
+}
+.btn-close {
+  filter: invert(0.8) brightness(1.5) !important;
+}
+
+/* ============================================================
+   ALERTS — Dark themed
+   ============================================================ */
+.alert-danger {
+  background: rgba(239,68,68,0.15) !important;
+  border: 1px solid rgba(239,68,68,0.25) !important;
+  color: #fca5a5 !important;
+  border-radius: 10px !important;
+}
+.alert-success {
+  background: rgba(34,197,94,0.15) !important;
+  border: 1px solid rgba(34,197,94,0.25) !important;
+  color: #86efac !important;
+  border-radius: 10px !important;
+}
+.alert-info {
+  background: rgba(59,130,246,0.15) !important;
+  border: 1px solid rgba(59,130,246,0.25) !important;
+  color: #93c5fd !important;
+  border-radius: 10px !important;
+}
+.alert-warning {
+  background: rgba(245,158,11,0.15) !important;
+  border: 1px solid rgba(245,158,11,0.25) !important;
+  color: #fcd34d !important;
+  border-radius: 10px !important;
+}
+
+/* ============================================================
+   BADGES
+   ============================================================ */
+.badge {
+  border-radius: 20px;
+  font-weight: 500;
+}
+.badge-soft-danger,
+.badge.bg-danger {
+  background: rgba(239,68,68,0.2) !important;
+  color: #f87171 !important;
+}
+.badge-soft-primary,
+.badge.bg-primary {
+  background: rgba(59,130,246,0.2) !important;
+  color: #60a5fa !important;
+}
+.badge-soft-success,
+.badge.bg-success {
+  background: rgba(34,197,94,0.2) !important;
+  color: #4ade80 !important;
+}
+
+/* ============================================================
+   TEXT UTILITIES — Override Bootstrap
+   ============================================================ */
+.text-muted {
+  color: #7da8d9 !important;
+}
+.text-dark {
+  color: #e2eafc !important;
+}
+.text-secondary {
+  color: #93bbfd !important;
+}
+.text-primary {
+  color: #60a5fa !important;
+}
+.text-danger {
+  color: #f87171 !important;
+}
+.text-success {
+  color: #4ade80 !important;
+}
+.text-warning {
+  color: #fbbf24 !important;
+}
+.text-info {
+  color: #22d3ee !important;
+}
+.text-white-50 {
+  color: rgba(191,219,254,0.6) !important;
+}
+h1, h2, h3, h4, h5, h6 {
+  color: #e2eafc !important;
+}
+p {
+  color: #bfdbfe;
+}
+label {
+  color: #93bbfd;
+}
+strong {
+  color: #e2eafc;
+}
+
+/* ============================================================
+   BACKGROUND UTILITIES
+   ============================================================ */
+.bg-white {
+  background: rgba(15,40,71,0.6) !important;
+}
+.bg-light {
+  background: rgba(10,22,40,0.5) !important;
+  color: #bfdbfe !important;
+}
+
+/* ============================================================
+   CHAT COMPONENTS
+   ============================================================ */
+/* Chat conversation area */
+.chat-conversation {
+  background: transparent !important;
+}
+
+/* Chat input section */
+.chat-input-section {
+  background: linear-gradient(180deg, rgba(15,40,71,0.4) 0%, rgba(10,22,40,0.6) 100%) !important;
+  border-color: rgba(96,165,250,0.12) !important;
+}
+
+/* Message bubbles */
+.chat-conversation .right .conversation-list .ctext-wrap .ctext-wrap-content {
+  background: linear-gradient(135deg, #1a4a8a 0%, #2563eb 100%) !important;
+  color: #ffffff !important;
+  border-radius: 8px 8px 0 8px !important;
+}
+.chat-conversation .right .conversation-list .ctext-wrap .ctext-wrap-content:before {
+  border-top-color: #2563eb !important;
+  border-right-color: #2563eb !important;
+}
+.chat-conversation .right .conversation-list .ctext-wrap .ctext-wrap-content p {
+  color: #ffffff !important;
+}
+.chat-conversation .right .conversation-list .chat-time {
+  color: rgba(255,255,255,0.6) !important;
+}
+.chat-conversation .conversation-list .ctext-wrap-content {
+  background: rgba(15,40,71,0.8) !important;
+  color: #e2eafc !important;
+  border: 1px solid rgba(96,165,250,0.1) !important;
+  border-radius: 8px 8px 8px 0 !important;
+}
+.chat-conversation .conversation-list .ctext-wrap-content:before {
+  border-left-color: rgba(15,40,71,0.8) !important;
+  border-top-color: rgba(15,40,71,0.8) !important;
+}
+.chat-conversation .conversation-list .ctext-wrap-content p {
+  color: #e2eafc !important;
+}
+.chat-conversation .conversation-list .ctext-wrap-content .card {
+  background: rgba(10,22,40,0.5) !important;
+  border: 1px solid rgba(96,165,250,0.1) !important;
+  color: #bfdbfe !important;
+}
+.chat-conversation .conversation-list .ctext-wrap-content .mb-0 {
+  color: inherit !important;
+}
+
+/* Chat list items */
+.chat-list li a {
+  color: #bfdbfe !important;
+  border-color: rgba(96,165,250,0.08) !important;
+  transition: background 0.15s ease;
+}
+.chat-list li a:hover {
+  background: rgba(37,99,235,0.1) !important;
+}
+.chat-list li.active a,
+.chat-list li a.active {
+  background: rgba(37,99,235,0.15) !important;
+}
+.chat-list .chat-user-message {
+  color: #7da8d9 !important;
+}
+
+/* Quote card */
+.quote-card {
+  background: rgba(37,99,235,0.1) !important;
+  border: 1px solid rgba(96,165,250,0.15) !important;
+  border-radius: 10px !important;
+}
+.quote-card .bg-light {
+  background: rgba(10,22,40,0.4) !important;
+}
+
+/* Search box */
+.search-box .form-control {
+  background: rgba(10,22,40,0.6) !important;
+}
+
+/* ============================================================
+   AUTH PAGES
+   ============================================================ */
+.account-pages {
+  min-height: 100vh;
+}
+.account-pages .card {
+  background: rgba(15,40,71,0.7) !important;
+  backdrop-filter: blur(20px) !important;
+  border: 1px solid rgba(96,165,250,0.15) !important;
+}
+.account-pages h4 {
+  color: #e2eafc !important;
+}
+.account-pages .text-muted {
+  color: #7da8d9 !important;
+}
+.auth-logo img {
+  filter: brightness(1.1);
+}
+
+/* ============================================================
+   AVATAR
+   ============================================================ */
+.avatar-title {
+  background: rgba(37,99,235,0.2) !important;
+  color: #60a5fa !important;
+}
+.avatar-xs {
+  border: 1px solid rgba(96,165,250,0.15);
+}
+
+/* ============================================================
+   LIST GROUP — Dark
+   ============================================================ */
+.list-group-item {
+  background: rgba(15,40,71,0.4) !important;
+  border-color: rgba(96,165,250,0.1) !important;
+  color: #e2eafc !important;
+}
+.list-group-item:hover {
+  background: rgba(37,99,235,0.1) !important;
+}
+
+/* ============================================================
+   BORDERS & DIVIDERS
+   ============================================================ */
+.border,
+.border-top,
+.border-bottom,
+.border-start,
+.border-end {
+  border-color: rgba(96,165,250,0.1) !important;
+}
+hr {
+  border-color: rgba(96,165,250,0.12) !important;
+  opacity: 1;
+}
+
+/* ============================================================
+   SHADOWS & CARD VARIANTS
+   ============================================================ */
+.shadow-sm {
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3) !important;
+}
+.shadow {
+  box-shadow: 0 4px 24px rgba(0,0,0,0.3) !important;
+}
+.shadow-lg {
+  box-shadow: 0 8px 48px rgba(0,0,0,0.4) !important;
+}
+.card.border-0.bg-light {
+  background: rgba(10,22,40,0.5) !important;
+  border: 1px solid rgba(96,165,250,0.08) !important;
+}
+
+/* ============================================================
+   LANDING PAGE
+   ============================================================ */
+.hero-section {
+  background: linear-gradient(145deg, #0a1628 0%, #0f2847 50%, #132e54 100%) !important;
+}
+.footer-alt {
+  background: rgba(10,22,40,0.8) !important;
+  border-top: 1px solid rgba(96,165,250,0.1);
+}
+
+/* ============================================================
+   MISC OVERRIDES
+   ============================================================ */
+/* Waves effect (bootstrap plugin) */
+.waves-effect {
+  position: relative;
+  overflow: hidden;
+}
+
+/* Fix dropdowns */
+.dropdown-menu {
+  background: linear-gradient(145deg, #0f2644 0%, #132e54 100%) !important;
+  border: 1px solid rgba(96,165,250,0.15) !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4) !important;
+}
+.dropdown-item {
+  color: #bfdbfe !important;
+}
+.dropdown-item:hover,
+.dropdown-item:focus {
+  background: rgba(37,99,235,0.15) !important;
+  color: #e2eafc !important;
+}
+
+/* Tooltips */
+.tooltip-inner {
+  background: rgba(15,40,71,0.95) !important;
+  border: 1px solid rgba(96,165,250,0.2);
+  color: #bfdbfe !important;
+}
+
+/* Pagination */
+.page-link {
+  background: rgba(10,22,40,0.6) !important;
+  border-color: rgba(96,165,250,0.15) !important;
+  color: #60a5fa !important;
+}
+.page-item.active .page-link {
+  background: #2563eb !important;
+  border-color: #2563eb !important;
+  color: #fff !important;
+}
+
+/* Selection */
+::selection {
+  background: rgba(59,130,246,0.3);
+  color: #ffffff;
+}
+
+/* Placeholder for simplebar (scrollbar plugin) */
+.simplebar-scrollbar::before {
+  background: rgba(96,165,250,0.3) !important;
+}
+
+/* Save/Edit modal overlay used in [chatId] page */
+.bg-black.bg-opacity-40 {
+  background: rgba(5,10,20,0.7) !important;
+}
+
+/* Inline save contact modal in chat page */
+.bg-white.rounded.shadow-lg {
+  background: linear-gradient(145deg, #0f2644 0%, #132e54 100%) !important;
+  color: #e2eafc !important;
+  border: 1px solid rgba(96,165,250,0.15) !important;
+}
+
+/* Fix context menu */
+.bg-white.border.rounded.shadow-lg {
+  background: linear-gradient(145deg, #0f2644 0%, #132e54 100%) !important;
+  color: #bfdbfe !important;
+  border-color: rgba(96,165,250,0.15) !important;
+}
+
+/* Fix for form-select (select elements) */
+.form-select option {
+  background: #0f2644;
+  color: #bfdbfe;
+}
+
+/* Container background override */
+.container-fluid {
+  background: transparent !important;
+}
+
+/* ============================================================
+   CHAT INPUT — Dark
+   ============================================================ */
+.form-control.bg-light.border-light,
+.form-control-lg.bg-light.border-light {
+  background: rgba(10,22,40,0.8) !important;
+  border: 1px solid rgba(96,165,250,0.15) !important;
+  color: #bfdbfe !important;
+}
+.form-control.bg-light.border-light::placeholder {
+  color: rgba(125,168,217,0.5) !important;
+}
+.chat-input-links .btn-link {
+  color: #7da8d9 !important;
+}
+.chat-input-links .btn-link:hover {
+  color: #60a5fa !important;
+}
+
+/* Chat time text */
+.chat-time {
+  color: rgba(191,219,254,0.5) !important;
+  font-size: 0.75rem;
+}
+
+/* Attachment card */
+.attachment-card {
+  background: rgba(15,40,71,0.6) !important;
+  border: 1px solid rgba(96,165,250,0.12) !important;
+}
+
+/* Chat user list items */
+.chat-user-list li a {
+  padding: 10px 12px !important;
+  border-radius: 10px !important;
+  margin-bottom: 2px;
+}
+.chat-user-list li a:hover {
+  background: rgba(37,99,235,0.1) !important;
+}
+.chat-user-list h5 {
+  color: #e2eafc !important;
+}
+
+/* Unread message badge */
+.unread-message .badge {
+  background: rgba(239,68,68,0.2) !important;
+  color: #f87171 !important;
+}
+
+/* User status indicator */
+.user-status {
+  border-color: rgba(10,22,40,0.8) !important;
+}
+
+/* Chat message list */
+.chat-message-list {
+  background: transparent !important;
+}
+
+/* WC boxes (landing page feature cards) */
+.wc-box {
+  background: rgba(15,40,71,0.6) !important;
+  border: 1px solid rgba(96,165,250,0.12) !important;
+  backdrop-filter: blur(12px);
+}
+.wc-box-icon i {
+  color: #3b82f6 !important;
+}
+.wc-title {
+  color: #e2eafc !important;
+}
+.wc-subtitle {
+  color: #7da8d9 !important;
+}
+
+/* Hero section text override */
+.hero-1-bg {
+  background: linear-gradient(145deg, #0a1628 0%, #0f2847 40%, #132e54 70%, #0d1f3c 100%) !important;
+}
+.hero-1-title {
+  color: #e2eafc !important;
+}
+
+/* Landing page navbar */
+.navbar-custom .nav-link {
+  color: #bfdbfe !important;
+}
+.navbar-custom .nav-link:hover {
+  color: #ffffff !important;
+}
+
+/* Fix .text-gray- tailwind classes used in some pages */
+.text-gray-500 {
+  color: #7da8d9 !important;
+}
+.text-gray-600 {
+  color: #93bbfd !important;
+}
+.hover\:bg-gray-100:hover {
+  background: rgba(37,99,235,0.1) !important;
+}
+.hover\:bg-gray-50:hover {
+  background: rgba(37,99,235,0.08) !important;
+}
+.bg-gray-200 {
+  background: rgba(15,40,71,0.5) !important;
+}
+
+/* Conversation list sender name */
+.ctext-wrap-content .text-xs {
+  color: #7da8d9 !important;
+}
+
+/* Border-light override */
+.border-light {
+  border-color: rgba(96,165,250,0.12) !important;
+}
+
+/* Primary subtle backgrounds */
+.bg-primary-subtle {
+  background: rgba(37,99,235,0.15) !important;
+}
+
+/* ============================================================
+   TAILWIND UTILITY OVERRIDES — Dark theme compatibility
+   ============================================================ */
+
+/* Text colors — ensure visibility on dark backgrounds */
+.text-red-500 {
+  color: #f87171 !important;
+}
+.text-red-600 {
+  color: #ef4444 !important;
+}
+.text-blue-500 {
+  color: #60a5fa !important;
+}
+.text-blue-600 {
+  color: #93bbfd !important;
+}
+.text-green-500 {
+  color: #4ade80 !important;
+}
+.text-green-600 {
+  color: #34d399 !important;
+}
+.text-gray-300 {
+  color: #bfdbfe !important;
+}
+.text-gray-400 {
+  color: #93bbfd !important;
+}
+.text-gray-700 {
+  color: #bfdbfe !important;
+}
+.text-gray-800 {
+  color: #e2eafc !important;
+}
+.text-gray-900 {
+  color: #e2eafc !important;
+}
+.text-black {
+  color: #e2eafc !important;
+}
+
+/* Background overrides for Tailwind utility classes */
+.bg-gray-50 {
+  background: rgba(15,40,71,0.3) !important;
+}
+.bg-gray-100 {
+  background: rgba(15,40,71,0.4) !important;
+}
+.bg-gray-300 {
+  background: rgba(15,40,71,0.6) !important;
+}
+.hover\:bg-gray-300:hover {
+  background: rgba(37,99,235,0.15) !important;
+}
+
+/* Tailwind border overrides */
+.border-gray-200,
+.border-gray-300 {
+  border-color: rgba(96,165,250,0.15) !important;
+}
+
+/* Fix font-semibold headings inside dark modals / panels */
+.font-semibold {
+  color: #e2eafc;
+}
+
+/* Tailwind text-sm / text-xs inherits body color — ensure readability */
+.text-sm,
+.text-xs {
+  color: inherit;
+}
+
+/* Chat page inline Tailwind classes — context menu, modals */
+.fixed.z-50.bg-white {
+  background: linear-gradient(145deg, #0f2644 0%, #132e54 100%) !important;
+  color: #bfdbfe !important;
+  border-color: rgba(96,165,250,0.15) !important;
+}
+
+/* Tailwind "block" label used in save-contact modal */
+label.block {
+  color: #93bbfd;
+}
+
+/* Tailwind border + rounded inputs (save modal) */
+input.border.rounded {
+  background: rgba(10,22,40,0.8) !important;
+  border-color: rgba(96,165,250,0.2) !important;
+  color: #bfdbfe !important;
+}
+input.border.rounded::placeholder {
+  color: rgba(125,168,217,0.5) !important;
+}
+input.border.rounded:focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.3) !important;
+  outline: none;
+}
+
+/* Save-modal cancel button */
+button.bg-white {
+  background: rgba(15,40,71,0.6) !important;
+  color: #bfdbfe !important;
+  border-color: rgba(96,165,250,0.2) !important;
+}
+button.bg-white:hover {
+  background: rgba(37,99,235,0.12) !important;
+  color: #e2eafc !important;
+}
+
+/* Fixed inset overlay (save-contact modal backdrop) */
+.fixed.inset-0 {
+  background: rgba(5,10,20,0.7) !important;
+}
+
+/* Chat page "no messages yet" text */
+.flex.justify-center.items-center.text-gray-500 {
+  color: #7da8d9 !important;
+}
+
+/* Broadcast page bg-white overrides */
+.chat-input-wrapper.bg-white {
+  background: rgba(15,40,71,0.6) !important;
+  color: #bfdbfe !important;
+}
+
+/* Forms pages bg-white */
+.p-4.bg-white {
+  background: rgba(15,40,71,0.6) !important;
+  color: #e2eafc !important;
+}
+
+/* Approval form autocomplete dropdown */
+.position-absolute.bg-white {
+  background: linear-gradient(145deg, #0f2644 0%, #132e54 100%) !important;
+  color: #bfdbfe !important;
+  border-color: rgba(96,165,250,0.15) !important;
+}

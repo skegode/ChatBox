@@ -1,5 +1,6 @@
 // import './globals.css';
 import {AuthProvider} from '../components/providers/AuthProvider';
+import {ThemeProvider} from '../components/providers/ThemeProvider';
 
 export const metadata = {
   title: 'Customer Desk',
@@ -28,14 +29,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link href="/css/icons.min.css" rel="stylesheet" type="text/css" />
         {/* App Css */}
         <link href="/css/app.min.css" id="app-style" rel="stylesheet" type="text/css" />
+        {/* Dark Navy Theme */}
+        <link href="/css/dark-theme.css" rel="stylesheet" type="text/css" id="dark-theme-style" />
+        {/* Light Theme Overrides (always loaded, scoped via body[data-theme="light"]) */}
+        <link href="/css/light-theme.css" rel="stylesheet" type="text/css" />
 
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css" />
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" async></script>
       </head>
       <body>
-        <AuthProvider>
-          {children}
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            {children}
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

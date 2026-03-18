@@ -1,7 +1,7 @@
 // components/landing/FeaturesSection.tsx
 export default function FeaturesSection() {
   return (
-    <section className="section bg-white">
+    <section className="section landing-features">
       <div className="container">
         <div className="row justify-content-center">
           <div className="col-lg-4 align-self-center">
