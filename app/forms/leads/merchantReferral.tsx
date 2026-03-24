@@ -13,7 +13,7 @@ export default function MerchantReferralForm() {
   const [referrerPhone, setReferrerPhone] = useState("");
   const [phoneModel, setPhoneModel] = useState<string | number>("");
   const [county, setCounty] = useState<string | number>("");
-  const [merchantId, setMerchantId] = useState<string | number>("");
+  const [merchantCode, setMerchantCode] = useState<string>("");
   const [consent, setConsent] = useState(false);
   const [phoneModels, setPhoneModels] = useState<Option[]>([]);
   const [counties, setCounties] = useState<Option[]>([]);
@@ -21,7 +21,7 @@ export default function MerchantReferralForm() {
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ text: string; isError?: boolean } | null>(null);
-  const [submittedProspect, setSubmittedProspect] = useState<unknown | null>(null);
+  const [submittedProspect, setSubmittedProspect] = useState<any | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -36,7 +36,14 @@ export default function MerchantReferralForm() {
         if (!mounted) return;
         setPhoneModels(normalizeOptions(ptResp.data ?? ptResp));
         setCounties(normalizeOptions(cResp.data ?? cResp));
-        setMerchants(normalizeOptions(mResp.data ?? mResp));
+        // include merchantCode in option label when available
+        const rawMerchants = mResp.data ?? mResp;
+        const merchantOpts = (Array.isArray(rawMerchants) ? rawMerchants : []).map((it: any) => {
+          const code = it?.merchantCode ?? it?.MerchantCode ?? '';
+          const name = it?.businessName ?? it?.BusinessName ?? it?.name ?? `#${it?.id ?? ''}`;
+          return { id: it.id ?? it?.Id ?? name, name: code ? `${name} (${code})` : name };
+        });
+        setMerchants(merchantOpts);
       } catch (err) {
         setMessage({ text: "Could not load form options. Refresh to try again.", isError: true });
       } finally {
@@ -80,19 +87,20 @@ export default function MerchantReferralForm() {
     if (!phone.trim()) return setMessage({ text: "Phone is required.", isError: true });
     if (!phoneModel) return setMessage({ text: "Select a phone model.", isError: true });
     if (!county) return setMessage({ text: "Select a county.", isError: true });
-    if (!merchantId) return setMessage({ text: "Select a merchant.", isError: true });
+    const codeRe = /^mc\d{6}$/i;
+    if (!merchantCode || !codeRe.test(merchantCode)) return setMessage({ text: "Enter a valid merchant code (format mc######).", isError: true });
     if (!consent) return setMessage({ text: "You must consent to the privacy policy to continue.", isError: true });
     if (submitting) return;
     const payload = {
-      firstName: firstName.trim(),
-      otherName: otherName.trim() || undefined,
-      email: email.trim(),
-      phone: `+254${phone.trim()}`,
-      phoneModel: Number(phoneModel),
-      county: Number(county),
-      consent: consent,
-      merchantId: Number(merchantId),
-      ...(referrerPhone.trim() && { referrerPhone: referrerPhone.trim() })
+      FirstName: firstName.trim(),
+      OtherName: otherName.trim() || undefined,
+      Email: email.trim(),
+      Phone: `+254${phone.trim()}`,
+      PhoneModel: Number(phoneModel),
+      County: Number(county),
+      Consent: consent,
+      MerchantCode: merchantCode.trim().toLowerCase(),
+      ...(referrerPhone.trim() && { ReferrerPhone: referrerPhone.trim() })
     };
     try {
       setSubmitting(true);
@@ -103,6 +111,7 @@ export default function MerchantReferralForm() {
       setOtherName("");
       setPhone("");
       setEmail("");
+      setMerchantCode("");
       setConsent(false);
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -150,11 +159,16 @@ export default function MerchantReferralForm() {
           </select>
         </div>
         <div className="mb-3">
-          <label className="form-label">Referring Merchant <span style={{ color: "#d93025" }}>*</span></label>
-          <select className="form-control" value={merchantId} onChange={e => setMerchantId(e.target.value)} required disabled={loadingOptions}>
-            <option value="">{loadingOptions ? "Loading merchants…" : "Select merchant"}</option>
-            {merchants.map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
-          </select>
+          <label className="form-label">Merchant code (e.g. mc123456) <span style={{ color: "#d93025" }}>*</span></label>
+          <input
+            className="form-control"
+            value={merchantCode}
+            onChange={e => setMerchantCode(e.target.value)}
+            placeholder="Merchant code (e.g. mc123456)"
+            required
+            disabled={loadingOptions}
+          />
+          <div className="form-text">If you don't know the code, contact the merchant to get their mc###### code.</div>
         </div>
         <div className="alert alert-warning" role="alert" style={{ fontSize: "0.9rem" }}>
           Make sure you have carefully read the <a href="/docs/Onboarding_Info.pdf" target="_blank" rel="noopener noreferrer">Terms & Conditions</a> before giving your consent.

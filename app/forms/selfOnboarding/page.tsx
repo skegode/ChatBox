@@ -170,6 +170,7 @@ export default function SelfOnboardingPage() {
   const [email, setEmail] = useState('');
   const [postalAddress, setPostalAddress] = useState('');
   const [physicalAddress, setPhysicalAddress] = useState('');
+  const [referrerPhone, setReferrerPhone] = useState('');
   const [consent, setConsent] = useState(false);
 
   // --- State for file uploads ---

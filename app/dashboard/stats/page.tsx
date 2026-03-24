@@ -637,22 +637,29 @@ const StatsDashboard = () => {
                       ) : (
                         [...filteredConversations]
                           .sort((a, b) => new Date(b.lastMessageTime || 0).getTime() - new Date(a.lastMessageTime || 0).getTime())
-                          .map(c => (
+                          .map((c, idx) => (
                             <tr key={`${normalizeContactId(c.contactId) || 'c'}-${idx}`}>
                               <td>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                  <div className="stats-avatar">
-                                    {(c.contactName || c.contactId).charAt(0).toUpperCase()}
-                                  </div>
-                                  <span className="stats-contact-name">
-                                    {c.contactName || c.contactId}
-                                  </span>
+                                    <div className="stats-avatar" style={{ flex: '0 0 36px', width: 36, height: 36 }}>
+                                      {(c.contactName || c.contactId).charAt(0).toUpperCase()}
+                                    </div>
+                                    <span className="stats-contact-name" style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {c.contactName || c.contactId}
+                                    </span>
                                 </div>
                               </td>
-                              <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: c.lastMessageText ? 'pointer' : 'default' }}
+                              <td style={{ maxWidth: 400, cursor: c.lastMessageText ? 'pointer' : 'default' }}
                                   title={c.lastMessageText || ''}
                                   onClick={() => { if (c.lastMessageText) setPreviewMessage({ text: c.lastMessageText || '', time: c.lastMessageTime || null, contactId: c.contactId }); }}>
-                                {c.lastMessageText || '—'}
+                                <div style={{
+                                  display: '-webkit-box',
+                                  WebkitLineClamp: 2,
+                                  WebkitBoxOrient: 'vertical',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'normal'
+                                }}>{c.lastMessageText || '—'}</div>
                               </td>
                               <td style={{ whiteSpace: 'nowrap' }}>
                                 {c.lastMessageTime ? new Date(c.lastMessageTime).toLocaleString() : '—'}

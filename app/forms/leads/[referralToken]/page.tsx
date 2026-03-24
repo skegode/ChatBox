@@ -396,7 +396,7 @@ export default function LeadFormPage() {
   }
 
   // State to hold submitted prospect details
-  const [submittedProspect, setSubmittedProspect] = useState<unknown | null>(null);
+  const [submittedProspect, setSubmittedProspect] = useState<any | null>(null);
 
   // Consistent styles with dashboard pages
   return (

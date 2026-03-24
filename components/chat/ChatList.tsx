@@ -13,6 +13,7 @@ import { useAuth } from "../providers/AuthProvider";
 import { PERMISSIONS } from "@/lib/permissions";
 
 export type Conversation = {
+  id?: string;
   contactId: string;
   contactName?: string | null;
   lastMessageText?: string | null;
@@ -68,81 +69,81 @@ export default function ChatList() {
         });
       });
 
-      // For chats that don't include a last message preview, fetch lightweight previews in controlled batches
-      const missingAll = (normalized as Conversation[]).filter(c => !(c.lastMessageText) && c.contactId).map(c => c.contactId);
-      const maxFetchPreviews = 200; // hard cap to avoid overloading backend
-      const toFetch = missingAll.slice(0, maxFetchPreviews);
-      if (toFetch.length > 0) {
-        const batchSize = 10;
-        // cache successful previews to avoid re-fetching across refreshes
-        const previewsCache: Record<string, { lastMessageText?: string | null; lastMessageTime?: string | Date | null; lastMediaPath?: string | null; lastMessageType?: string | null }> = {};
+      // For chats that don't include a last message preview, fetch lightweight previews in background
+      (async () => {
+        try {
+          const missingAll = (normalized as Conversation[]).filter(c => !(c.lastMessageText) && c.contactId).map(c => c.contactId);
+          const maxFetchPreviews = 200; // hard cap to avoid overloading backend
+          const toFetch = missingAll.slice(0, maxFetchPreviews);
+          if (toFetch.length === 0) return;
 
-        for (let i = 0; i < toFetch.length; i += batchSize) {
-          const batchIds = toFetch.slice(i, i + batchSize);
-          const results = await Promise.allSettled(batchIds.map(async (contactId) => {
-            // Try primary path then leading-plus fallback
-            const tryFetch = async (idToUse: string) => {
-              try {
-                const r = await api.get(`/api/Messages/contact/${encodeURIComponent(idToUse)}`);
-                return r.data;
-              } catch (_) {
-                return null;
-              }
-            };
+          const batchSize = 10;
+          const previewsCache: Record<string, { lastMessageText?: string | null; lastMessageTime?: string | Date | null; lastMediaPath?: string | null; lastMessageType?: string | null }> = {};
 
-            let data = await tryFetch(contactId);
-            if (!data) {
-              const withPlus = contactId.startsWith('+') ? contactId : `+${contactId}`;
-              data = await tryFetch(withPlus);
-            }
-            const msgs = chatAdapter.normalizeMessages(data, contactId);
-            return { contactId, msgs };
-          }));
-
-          for (const res of results) {
-            if (res.status === 'fulfilled') {
-              const { contactId, msgs } = res.value as { contactId: string; msgs: any[] };
-                if (msgs && msgs.length > 0) {
-                msgs.sort((a, b) => new Date((b as any).messageDateTime).getTime() - new Date((a as any).messageDateTime).getTime());
-                const last = msgs[0];
-                // If the last message has no text but includes media, show a simple attachment label
-                let previewText = last.messageText ?? null;
-                if (!previewText && (last.mediaPath || last.messageType)) {
-                  const mt = (last.messageType || "").toString().toLowerCase();
-                  const isImage = mt.includes("image") || /(\.jpg|\.jpeg|\.png|\.gif|\.webp)$/i.test(String(last.mediaPath || ""));
-                  previewText = isImage ? "[Image]" : "[Attachment]";
+          for (let i = 0; i < toFetch.length; i += batchSize) {
+            const batchIds = toFetch.slice(i, i + batchSize);
+            const results = await Promise.allSettled(batchIds.map(async (contactId) => {
+              const tryFetch = async (idToUse: string) => {
+                try {
+                  const r = await api.get(`/api/Messages/contact/${encodeURIComponent(idToUse)}`);
+                  return r.data;
+                } catch (_) {
+                  return null;
                 }
-                const entry = {
-                  lastMessageText: previewText,
-                  lastMessageTime: last.messageDateTime ?? null,
-                  lastMediaPath: last.mediaPath ?? null,
-                  lastMessageType: last.messageType ?? null,
-                };
-                previewsCache[contactId] = entry;
-                // also store by normalized id to avoid +/non-plus mismatches
-                previewsCache[normalizeContactId(contactId)] = entry;
+              };
+
+              let data = await tryFetch(contactId);
+              if (!data) {
+                const withPlus = contactId.startsWith('+') ? contactId : `+${contactId}`;
+                data = await tryFetch(withPlus);
+              }
+              const msgs = chatAdapter.normalizeMessages(data, contactId);
+              return { contactId, msgs };
+            }));
+
+            for (const res of results) {
+              if (res.status === 'fulfilled') {
+                const { contactId, msgs } = res.value as { contactId: string; msgs: any[] };
+                if (msgs && msgs.length > 0) {
+                  msgs.sort((a, b) => new Date((b as any).messageDateTime).getTime() - new Date((a as any).messageDateTime).getTime());
+                  const last = msgs[0];
+                  let previewText = last.messageText ?? null;
+                  if (!previewText && (last.mediaPath || last.messageType)) {
+                    const mt = (last.messageType || "").toString().toLowerCase();
+                    const isImage = mt.includes("image") || /(\.jpg|\.jpeg|\.png|\.gif|\.webp)$/i.test(String(last.mediaPath || ""));
+                    previewText = isImage ? "[Image]" : "[Attachment]";
+                  }
+                  const entry = {
+                    lastMessageText: previewText,
+                    lastMessageTime: last.messageDateTime ?? null,
+                    lastMediaPath: last.mediaPath ?? null,
+                    lastMessageType: last.messageType ?? null,
+                  };
+                  previewsCache[contactId] = entry;
+                  previewsCache[normalizeContactId(contactId)] = entry;
+                }
               }
             }
-          }
 
-          // apply cache to chats state incrementally to avoid UI delay
-          if (Object.keys(previewsCache).length > 0) {
-            setChats(prev => (prev || []).map(ch => {
-              const key = normalizeContactId(ch.contactId) || ch.contactId;
-              const p = previewsCache[key] || previewsCache[ch.contactId];
-              if (!p) return ch;
-              return {
-                ...ch,
-                lastMessageText: ch.lastMessageText ?? p.lastMessageText ?? ch.lastMessageText,
-                lastMessageTime: ch.lastMessageTime ?? p.lastMessageTime ?? ch.lastMessageTime,
-                // Only set media fields if preview has a real value (avoid overwriting existing with null)
-                lastMediaPath: ch.lastMediaPath ?? p.lastMediaPath ?? ch.lastMediaPath,
-                lastMessageType: ch.lastMessageType ?? p.lastMessageType ?? ch.lastMessageType,
-              };
-            }));
+            if (Object.keys(previewsCache).length > 0) {
+              setChats(prev => (prev || []).map(ch => {
+                const key = normalizeContactId(ch.contactId) || ch.contactId;
+                const p = previewsCache[key] || previewsCache[ch.contactId];
+                if (!p) return ch;
+                return {
+                  ...ch,
+                  lastMessageText: ch.lastMessageText ?? p.lastMessageText ?? ch.lastMessageText,
+                  lastMessageTime: ch.lastMessageTime ?? p.lastMessageTime ?? ch.lastMessageTime,
+                  lastMediaPath: ch.lastMediaPath ?? p.lastMediaPath ?? ch.lastMediaPath,
+                  lastMessageType: ch.lastMessageType ?? p.lastMessageType ?? ch.lastMessageType,
+                };
+              }));
+            }
           }
+        } catch (err) {
+          console.error('Background preview fetch failed', err);
         }
-      }
+      })();
       if (!Array.isArray(response.data) && showLoading) setChats([]);
     } catch (err: unknown) {
       console.error("Error fetching conversations:", err);
@@ -369,7 +370,7 @@ export default function ChatList() {
   }
 
   return (
-    <div>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div className="px-4 pt-4">
         <div className="d-flex mb-4">
           <h4 className="mb-0 flex-grow-1">Chats</h4>
@@ -406,8 +407,8 @@ export default function ChatList() {
           </div>
         </div>
       </div>
-      <div>
-        <div className="chat-message-list px-2">
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <div className="chat-message-list px-2" style={{ height: '100%', overflow: 'auto' }}>
           <ul className="list-unstyled chat-list chat-user-list w-100">
             {/* Deduplicate by contactId */}
             {filteredChats

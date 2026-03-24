@@ -9,7 +9,7 @@ import { useTheme } from '../providers/ThemeProvider';
 
 
 export default function Sidebar() {
-  const [activeSection, setActiveSection] = useState<'chats' | 'contacts' | 'users' | 'assignments' | 'settings' | 'merchants' | 'prospects' | 'influencers'>('chats');
+  const [activeSection, setActiveSection] = useState<'chats' | 'contacts' | 'users' | 'assignments' | 'settings' | 'merchants' | 'prospects' | 'influencers' | 'stats'>('chats');
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const pathname = usePathname();
   const router = useRouter();

@@ -28,7 +28,7 @@ export default function ApprovalFormClient() {
   const [promoExpiresAt] = useState(searchParams?.get('promoExpiresAt') ?? '');
 
   // merchants now include geoLocation
-  const [merchants, setMerchants] = useState([] as { id: number; businessName?: string; geoLocation?: string }[]);
+  const [merchants, setMerchants] = useState([] as { id: number; businessName?: string; geoLocation?: string; merchantCode?: string }[]);
   const [merchantId, setMerchantId] = useState<number | ''>('');
   const [merchantSearch, setMerchantSearch] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false); // New state for dropdown visibility
@@ -49,7 +49,7 @@ export default function ApprovalFormClient() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  type MerchantDto = { id: number; businessName?: string | null; geoLocation?: string | null };
+  type MerchantDto = { id: number; businessName?: string | null; geoLocation?: string | null; merchantCode?: string | null; MerchantCode?: string | null };
 
   useEffect(() => {
     let mounted = true;
@@ -65,6 +65,7 @@ export default function ApprovalFormClient() {
               id: it.id,
               businessName: it.businessName ?? `#${it.id}`,
               geoLocation: it.geoLocation ?? '',
+              merchantCode: it.merchantCode ?? it.MerchantCode ?? undefined,
             };
           });
           setMerchants(fetchedMerchants);
@@ -211,7 +212,8 @@ export default function ApprovalFormClient() {
         onClick={() => handleMerchantSelect(m)}
         className="p-2 cursor-pointer hover-bg-light"
       >
-        {m.businessName ?? `#${m.id}`} {m.geoLocation ? `(${m.geoLocation})` : ''}
+        <div><strong>{m.businessName ?? `#${m.id}`}</strong> {m.merchantCode ? <span style={{ fontFamily: 'monospace', marginLeft: 8 }}>({m.merchantCode})</span> : null}</div>
+        <div className="text-muted small">{m.geoLocation ?? ''}</div>
       </div>
     ));
   };

@@ -20,6 +20,7 @@ type ProspectItem = {
   influencerName: string;
   referralSource: 'Merchant' | 'Client' | 'Unknown';
   referrerName: string;
+  merchantCode?: string | null;
   referrerPhone?: string | null;
   referrerId: number | null;
   promoCode: string | null;
@@ -39,6 +40,8 @@ export default function ProspectsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [q, setQ] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [countyFilter, setCountyFilter] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [total, setTotal] = useState(0);
@@ -63,7 +66,9 @@ export default function ProspectsPage() {
 
         const data = res.data;
         if (data && Array.isArray(data.items)) {
-          setItems(data.items);
+          // Ensure prospects with no status show as "New"
+          const normalized = data.items.map((it: any) => ({ ...it, status: it.status || 'New' }));
+          setItems(normalized);
           setTotal(typeof data.total === 'number' ? data.total : 0);
         } else {
           setItems([]);
@@ -124,6 +129,28 @@ export default function ProspectsPage() {
     router.push(`/dashboard/prospects/approvalForm?${params.toString()}`);
   }
 
+  function openDetail(p: ProspectItem) {
+    // navigate to new detail page
+    router.push(`/dashboard/prospects/${p.id}`);
+  }
+
+  function statusDotColor(status?: string) {
+    const s = (status || '').toLowerCase();
+    if (s.includes('progress')) return '#f59e0b'; // yellow
+    if (s.includes('new')) return '#60a5fa'; // blue
+    if (s.includes('closed') || s.includes('completed') || s.includes('converted')) return '#10b981'; // green
+    if (s.includes('unknown') || s.includes('unknown')) return '#8b5cf6'; // purple
+    return '#94a3b8';
+  }
+
+  function renderStatusBadge(status?: string) {
+    const label = status || 'Unknown';
+    const color = statusDotColor(status);
+    return (
+      <span style={{ display: 'inline-block', padding: '6px 12px', borderRadius: 999, background: `${color}22`, color, fontWeight: 700, fontSize: '0.85rem' }}>{label}</span>
+    );
+  }
+
   function togglePromo(id: number) {
     setExpandedPromoIds((prev) => {
       const next = new Set(prev);
@@ -137,10 +164,15 @@ export default function ProspectsPage() {
     const handleStatusChange = async (id: number, newStatus: string) => {
       setStatusUpdating((prev) => ({ ...prev, [id]: true }));
       try {
-        await api.patch(`api/Leads/UpdateProspectStatus`, { id, status: newStatus });
+        const res = await api.patch('/api/Leads/UpdateProspectStatus', { LeadId: id, Status: newStatus });
+        const updated = res?.data;
         setItems((prev) =>
           prev
-            ? prev.map((item) => (item.id === id ? { ...item, status: newStatus } : item))
+            ? prev.map((item) =>
+                item.id === id
+                  ? { ...item, status: (updated && (updated.Status || (updated.status as string))) || newStatus }
+                  : item
+              )
             : prev
         );
       } catch (err) {
@@ -203,11 +235,30 @@ export default function ProspectsPage() {
             <div className="text-center p-4 text-danger" style={{fontSize: '0.9rem'}}>{error}</div>
           ) : items && items.length > 0 ? (
             <>
-              <div className='d-flex justify-content-between align-items-center mb-3'>
-                <div className="text-sm text-muted flex-grow-1" style={{fontSize: '0.85rem'}}>
-                  Showing page {page} of {totalPages} — {total} total
+              <div className='d-flex justify-content-between align-items-center mb-3' style={{ gap: 12 }}>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center', flex: 1 }}>
+                  <div style={{ position: 'relative', flex: 1 }}>
+                    <i className="ri-search-line" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
+                    <input
+                      value={q}
+                      onChange={(e) => setQ(e.target.value)}
+                      placeholder="Search name, email, phone or code"
+                      className="form-control"
+                      style={{ paddingLeft: 36 }}
+                    />
+                  </div>
+                  <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="form-control" style={{ width: 160 }}>
+                    <option value="">All statuses</option>
+                    <option value="New">New</option>
+                    <option value="Contacted">Contacted</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Follow Up">Follow Up</option>
+                    <option value="Closed">Closed</option>
+                  </select>
+                  <input value={countyFilter} onChange={(e) => setCountyFilter(e.target.value)} placeholder="County" className="form-control" style={{ width: 140 }} />
                 </div>
-                <div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>Showing {Math.min((page-1)*pageSize+1,total)}–{Math.min(page*pageSize,total)} of {total}</div>
                   <select
                     value={pageSize}
                     onChange={(e) => {
@@ -215,7 +266,7 @@ export default function ProspectsPage() {
                       setPage(1);
                     }}
                     className="form-control dropdown"
-                    style={{fontSize: '0.85rem'}}
+                    style={{width: 90}}
                   >
                     <option value={10}>10</option>
                     <option value={25}>25</option>
@@ -225,21 +276,24 @@ export default function ProspectsPage() {
                 </div>
               </div>
               
+              <style>{`
+                .prospect-row td{ padding-top:12px; padding-bottom:12px; }
+                .prospect-row:hover{ background: #f9fafb; }
+                .prospects-table tbody tr:nth-child(even){ background: #fafafa; }
+                .prospects-table thead { position: sticky; top: 0; z-index: 2; background: white; }
+                .prospect-initial { width:36px; height:36px; display:inline-flex; align-items:center; justify-content:center; border-radius:999px; background:#e6eefc; color:#174ea6; font-weight:700; margin-right:8px }
+              `}</style>
+
               <div className="table-responsive">
                 <table className="table table-striped" style={{fontSize: '0.85rem'}}>
                   <thead className="table-light sticky-top">
                     <tr>
-                      <th style={{fontSize: '0.85rem'}}>Name</th>
+                      <th style={{fontSize: '0.9rem'}}>Name</th>
                       <th style={{fontSize: '0.85rem'}}>Email</th>
                       <th style={{fontSize: '0.85rem'}}>Phone</th>
-                      <th style={{fontSize: '0.85rem'}}>Phone Model</th>
                       <th style={{fontSize: '0.85rem'}}>County</th>
-                      <th style={{fontSize: '0.85rem'}}>Influencer Code</th>
                       <th style={{fontSize: '0.85rem'}}>Influencer</th>
                       <th style={{fontSize: '0.85rem'}}>Referral Source</th>
-                      <th style={{fontSize: '0.85rem'}}>Referrer Name</th>
-                      <th style={{fontSize: '0.85rem'}}>Referrer Phone</th>
-                      
                       <th style={{fontSize: '0.85rem'}}>Status</th>
                       <th style={{fontSize: '0.85rem'}}>Promo</th>
                       <th style={{fontSize: '0.85rem'}}>Created At</th>
@@ -247,124 +301,51 @@ export default function ProspectsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {uniqueItems.map((p) => (
-                      <tr key={p.id} style={{verticalAlign: 'middle'}}>
-                        <td style={{fontSize: '0.9rem'}}>{getDisplayName(p)}</td>
+                    {uniqueItems
+                      .filter(p => (statusFilter ? p.status === statusFilter : true))
+                      .filter(p => (countyFilter ? (p.county || '').toLowerCase().includes(countyFilter.toLowerCase()) : true))
+                      .map((p) => (
+                      <tr key={p.id} className="prospect-row" style={{verticalAlign: 'middle'}}>
+                        <td style={{fontSize: '0.95rem'}}>
+                          <span className="prospect-initial">{(getDisplayName(p) || p.email || '').charAt(0).toUpperCase()}</span>
+                          <div style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                            <div style={{ fontWeight: 700 }}>{getDisplayName(p)}</div>
+                            <div style={{ color: '#6b7280', fontSize: '0.85rem' }}>{p.email ?? ''}</div>
+                          </div>
+                        </td>
                         <td style={{fontSize: '0.85rem'}}>{p.email ?? ''}</td>
                         <td style={{fontSize: '0.85rem'}}>{p.phone ?? ''}</td>
-                        <td style={{fontSize: '0.85rem'}}>{p.phoneModel ?? ''}</td>
                         <td style={{fontSize: '0.85rem'}}>{p.county ?? ''}</td>
-                        <td style={{fontSize: '0.85rem'}}>{p.referralSource === 'Client' ? '' : (p.influencerCode ?? '')}</td>
                         <td style={{fontSize: '0.85rem'}}>{p.influencerName ?? ''}</td>
                         <td style={{fontSize: '0.85rem'}}>
                           {p.referralSource ? (
-                            <span
-                              style={{
-                                display: 'inline-block',
-                                background:
-                                  p.referralSource.toLowerCase().includes('merchant')
-                                    ? '#e0f7fa'
-                                    : p.referralSource.toLowerCase().includes('client')
-                                    ? '#e3f2fd'
-                                    : '#f3e5f5',
-                                color:
-                                  p.referralSource.toLowerCase().includes('merchant')
-                                    ? '#00796b'
-                                    : p.referralSource.toLowerCase().includes('client')
-                                    ? '#1565c0'
-                                    : '#6a1b9a',
-                                borderRadius: '12px',
-                                padding: '2px 10px',
-                                fontWeight: 600,
-                                fontSize: '0.8em',
-                                letterSpacing: '0.5px',
-                              }}
-                            >
+                            <span style={{ display: 'inline-block', background: p.referralSource.toLowerCase().includes('merchant') ? '#e0f7fa' : p.referralSource.toLowerCase().includes('client') ? '#e3f2fd' : '#f3e5f5', color: p.referralSource.toLowerCase().includes('merchant') ? '#00796b' : p.referralSource.toLowerCase().includes('client') ? '#1565c0' : '#6a1b9a', borderRadius: '12px', padding: '2px 10px', fontWeight: 600, fontSize: '0.8em' }}>
                               {p.referralSource.charAt(0).toUpperCase() + p.referralSource.slice(1).toLowerCase()}
                             </span>
                           ) : null}
                         </td>
-                        <td style={{fontSize: '0.85rem'}}>{p.referrerName ?? ''}</td>
-                        <td style={{fontSize: '0.85rem'}}>{p.referrerPhone ?? ''}</td>
-                        
-                        <td style={{fontSize: '0.85rem'}}>
-                          <select
-                            value={p.status || ''}
-                            disabled={statusUpdating[p.id]}
-                            onChange={(e) => handleStatusChange(p.id, e.target.value)}
-                            className="form-control form-select"
-                            style={{ fontSize: '0.85rem', minWidth: 100 }}
-                          >
-                            <option value="">Select status</option>
-                            <option value="New">New</option>
-                            <option value="Contacted">Contacted</option>
-                            <option value="In Progress">In Progress</option>
-                            <option value="Follow Up">Follow Up</option>
-                            <option value="Closed">Closed</option>
-                          </select>
-                        </td>
+                        <td style={{fontSize: '0.85rem'}}>{renderStatusBadge(p.status)}</td>
                         <td style={{width: 220, maxWidth: 220, paddingTop: 8, paddingBottom: 8}}>
                           {p.promoCode ? (
                             <div>
-                              <div
-                                onClick={() => togglePromo(p.id)}
-                                style={{
-                                  cursor: 'pointer',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 8,
-                                  userSelect: 'none'
-                                }}
-                                title={p.promoCode}
-                                aria-expanded={expandedPromoIds.has(p.id)}
-                              >
-                                <span
-                                  style={{
-                                    display: 'inline-block',
-                                    maxWidth: 140,
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                    fontWeight: 600,
-                                    fontSize: '0.9rem'
-                                  }}
-                                >
-                                  {p.promoCode}
-                                </span>
-                                <small className="text-muted" style={{fontSize: '0.75rem'}}>
-                                  {expandedPromoIds.has(p.id) ? 'Hide' : 'Details'}
-                                </small>
+                              <div onClick={() => togglePromo(p.id)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, userSelect: 'none' }} title={p.promoCode} aria-expanded={expandedPromoIds.has(p.id)}>
+                                <span style={{ display: 'inline-block', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600, fontSize: '0.9rem' }}>{p.promoCode}</span>
+                                <small className="text-muted" style={{fontSize: '0.75rem'}}>{expandedPromoIds.has(p.id) ? 'Hide' : 'Details'}</small>
                               </div>
-
                               {expandedPromoIds.has(p.id) && (
                                 <div style={{marginTop: 6, fontSize: '0.78rem', color: '#6c757d', lineHeight: 1.25}}>
-                                  {p.promoValue != null && (
-                                    <div>Value: {p.promoValue}</div>
-                                  )}
-                                  {p.promoRedeemed != null && (
-                                    <div>Redeemed: {p.promoRedeemed ? 'Yes' : 'No'}</div>
-                                  )}
-                                  {p.promoExpiresAt && (
-                                    <div>Expires: {new Date(p.promoExpiresAt).toLocaleString()}</div>
-                                  )}
+                                  {p.promoValue != null && (<div>Value: {p.promoValue}</div>)}
+                                  {p.promoRedeemed != null && (<div>Redeemed: {p.promoRedeemed ? 'Yes' : 'No'}</div>)}
+                                  {p.promoExpiresAt && (<div>Expires: {new Date(p.promoExpiresAt).toLocaleString()}</div>)}
                                 </div>
                               )}
                             </div>
-                          ) : (
-                            <span style={{fontSize: '0.85rem'}}></span>
-                          )}
+                          ) : (<span style={{fontSize: '0.85rem'}}></span>)}
                         </td>
-                        <td style={{fontSize: '0.85rem'}}>
-                          {p.createdAt ? new Date(p.createdAt).toLocaleString() : ''}
-                        </td>
+                        <td style={{fontSize: '0.85rem', color: '#6b7280'}}>{p.createdAt ? new Date(p.createdAt).toLocaleString() : ''}</td>
                         <td>
-                          <button
-                            onClick={() => openConvertForm(p)}
-                            className="btn btn-sm btn-dark"
-                            style={{fontSize: '0.8rem', padding: '0.25rem 0.5rem'}}
-                          >
-                            Convert
-                          </button>
+                          <button onClick={() => openConvertForm(p)} className="btn btn-sm btn-outline-secondary" style={{fontSize: '0.8rem', padding: '0.25rem 0.5rem'}} title="Convert"><i className="ri-refresh-line"></i></button>
+                          <button onClick={() => openDetail(p)} className="btn btn-sm btn-outline-primary ms-2" style={{fontSize: '0.8rem', padding: '0.25rem 0.5rem'}} title="View"><i className="ri-eye-line"></i></button>
                         </td>
                       </tr>
                     ))}

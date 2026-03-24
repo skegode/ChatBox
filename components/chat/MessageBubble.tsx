@@ -77,15 +77,32 @@ export default function MessageBubble({
     return idx >= 0 ? fileName.slice(idx + 1).toLowerCase() : "";
   };
 
+  // Resolve a media path or filename to a usable URL for preview/download.
+  // - If the path looks like an absolute URL, return as-is.
+  // - Otherwise route through the Next.js image proxy at /api/image/proxy?url=...
+  const resolveMediaUrl = (raw?: string | null) => {
+    if (!raw) return '';
+    const trimmed = String(raw).trim();
+    // absolute or protocol-relative
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed) || trimmed.startsWith('//')) return trimmed;
+    // absolute path on backend (starts with /) -> proxy will resolve against backend host
+    if (trimmed.startsWith('/')) return `/api/image/proxy?url=${encodeURIComponent(trimmed)}`;
+    // otherwise assume it's a filename or relative path -> proxy will try /images/<name>
+    return `/api/image/proxy?url=${encodeURIComponent(trimmed)}`;
+  };
+
   const [pdfObjectUrl, setPdfObjectUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [downloadLoading, setDownloadLoading] = useState(false);
 
   const [menuOpen, setMenuOpen] = useState(false);
+  const [imageLoading, setImageLoading] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   useEffect(() => {
-    const mediaUrl = message.mediaPath;
+    const mediaUrl = resolveMediaUrl(message.mediaPath);
     const fileName = getFileNameFromUrl(mediaUrl);
     const ext = getExt(fileName);
     let aborted = false;
@@ -120,6 +137,17 @@ export default function MessageBubble({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [message.mediaPath, message.messageType]);
+
+  // initialize image loading state when media changes
+  useEffect(() => {
+    if (message.mediaPath) {
+      setImageLoading(true);
+      setImageError(false);
+    } else {
+      setImageLoading(false);
+      setImageError(false);
+    }
+  }, [message.mediaPath]);
 
   const handleDownload = async (mediaUrl?: string | null) => {
     if (!mediaUrl) return;
@@ -167,44 +195,67 @@ export default function MessageBubble({
     switch (inferredType) {
       case "image":
         return (
-          <div className="card p-2 mb-2">
-            <div className="d-flex flex-wrap align-items-center attached-file">
+          <div className="card p-2 mb-2" style={{ border: 'none', background: 'transparent' }}>
+            <style>{`
+              .chat-image{ max-width:260px; border-radius:8px; object-fit:cover; cursor:pointer; display:block }
+              .chat-image-skeleton{ width:260px; height:160px; background:#f3f4f6; border-radius:8px }
+              .lightbox-overlay{ position:fixed; inset:0; background:rgba(0,0,0,0.7); display:flex; align-items:center; justify-content:center; z-index:1050 }
+              .lightbox-content img{ max-width:90%; max-height:90%; border-radius:8px }
+              .image-actions { display:flex; gap:8px; align-items:center }
+            `}</style>
+
+            <div className="d-flex flex-wrap align-items-start attached-file" style={{ gap: 12 }}>
               <div className="flex-grow-1 overflow-hidden">
                 <div className="text-start">
-                  <a
-                    className="popup-img d-inline-block m-1"
-                    href={mediaUrl}
-                    title={fileName || "Image"}
-                  >
+                  {!imageLoading && !imageError && (
                     <img
                       src={mediaUrl}
-                      alt={fileName || "Image"}
-                      style={{
-                        width: 180,
-                        height: 120,
-                        objectFit: "cover",
-                        display: "block",
-                      }}
-                      className="rounded border"
+                      alt={fileName || 'Image'}
+                      className="chat-image"
+                      onClick={() => setLightboxOpen(true)}
+                      onLoad={() => { setImageLoading(false); setImageError(false); }}
+                      onError={() => { setImageLoading(false); setImageError(true); }}
                     />
-                  </a>
-                  <p className="text-muted text-truncate font-size-13 mb-0">
-                    {fileName || "Image"}
-                  </p>
+                  )}
+
+                  {imageLoading && <div className="chat-image-skeleton" />}
+
+                  {imageError && (
+                    <div style={{ width: 260, height: 140, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff5f5', borderRadius: 8, color: '#9ca3af' }}>
+                      Image failed to load
+                    </div>
+                  )}
+
+                  {fileName ? (
+                    <div style={{ marginTop: 6 }}>
+                      <small style={{ fontSize: 11, color: '#9ca3af' }}>{fileName}</small>
+                    </div>
+                  ) : null}
                 </div>
               </div>
-              <div className="ms-4 me-0">
-                <div className="d-flex gap-2 font-size-20 d-flex align-items-start">
-                  <div>
-                    <button
-                      onClick={() => handleDownload(mediaUrl)}
-                      className="btn btn-sm btn-link fw-medium p-0"
-                    >
-                      <i className="ri-download-2-line" />
-                    </button>
+
+              <div className="image-actions">
+                <button onClick={() => setLightboxOpen(true)} className="btn btn-sm btn-outline-secondary" title="View" style={{ padding: '4px 8px' }}>
+                  <i className="ri-eye-line" />
+                </button>
+                <button onClick={() => handleDownload(mediaUrl)} className="btn btn-sm btn-outline-secondary" title="Download" style={{ padding: '4px 8px' }}>
+                  <i className="ri-download-2-line" />
+                </button>
+              </div>
+
+              {lightboxOpen && (
+                <div className="lightbox-overlay" onClick={() => setLightboxOpen(false)}>
+                  <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
+                    <img src={mediaUrl} alt={fileName || 'Image'} />
+                    <div style={{ display: 'flex', justifyContent: 'center', marginTop: 10 }}>
+                      <button className="btn btn-sm btn-light me-2" onClick={() => handleDownload(mediaUrl)}>
+                        <i className="ri-download-2-line" /> Download
+                      </button>
+                      <button className="btn btn-sm btn-secondary" onClick={() => setLightboxOpen(false)}>Close</button>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         );

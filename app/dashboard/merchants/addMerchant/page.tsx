@@ -33,7 +33,30 @@ export default function AddMerchantPage() {
         phoneNumber: form.phoneNumber,
         geoLocation: form.geoLocation,
       });
-      setSuccess('Merchant added successfully!');
+      // If backend returns a MerchantCode, show it. Otherwise attempt to fetch merchants and find it.
+      const returned = res?.data;
+      if (returned && (returned.merchantCode || returned.MerchantCode)) {
+        const code = returned.merchantCode ?? returned.MerchantCode;
+        setSuccess(`Merchant added successfully — code: ${code}`);
+      } else {
+        // Fallback: fetch merchants and try to find by businessName
+        try {
+          const list = await api.get('/api/Merchants');
+          if (Array.isArray(list.data)) {
+            const found = list.data.find((m: any) => (m.businessName ?? m.BusinessName) === form.businessName);
+            if (found) {
+              const code = found.merchantCode ?? found.MerchantCode;
+              setSuccess(code ? `Merchant added successfully — code: ${code}` : 'Merchant added successfully!');
+            } else {
+              setSuccess('Merchant added successfully!');
+            }
+          } else {
+            setSuccess('Merchant added successfully!');
+          }
+        } catch {
+          setSuccess('Merchant added successfully!');
+        }
+      }
       setForm({ businessName: '', emailAddress: '', phoneNumber: '', geoLocation: '' });
     } catch (err: unknown) {
       if (err instanceof Error) {

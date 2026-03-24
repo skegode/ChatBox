@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const BACKEND_URL = 'https://app.servicesuitecloud.com/WhatsappApi';
+const BACKEND_URL = (process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'https://app.servicesuitecloud.com/WhatsappApi').replace(/\/+$/, '');
 
 // Allow `any` for Next route context typing because Next's generated types
 // expect flexible signatures for dynamic route params.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function DELETE(request: Request, context: any) {
-  const params = context?.params ?? {};
-  const userId = String(params.id ?? "");
+  // In Next's App Router `context.params` may be a Promise — await it safely.
+  const params = context && context.params ? await context.params : {};
+  const userId = String(params?.id ?? "");
 
   // Forward the auth token from the incoming request
   const authHeader = request.headers.get('authorization') || '';

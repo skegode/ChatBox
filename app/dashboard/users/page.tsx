@@ -55,26 +55,17 @@ export default function UsersPage() {
     const deleteUrl = `/api/Users/${deletingUser.id}`;
     console.log(`🗑️ Attempting DELETE via proxy: ${deleteUrl} (User ID: ${deletingUser.id}, Name: ${deletingUser.firstName} ${deletingUser.otherName || ''})`);
     try {
-      const token = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null;
-      const res = await fetch(deleteUrl, {
-        method: 'DELETE',
-        headers: {
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-          'Accept': 'application/json',
-        },
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw { statusCode: res.status, errorMessage: errData?.error || `Delete failed (${res.status})`, responseData: errData };
-      }
+      const res = await api.delete(deleteUrl);
       console.log(`✅ DELETE successful: Status ${res.status}`);
       setUsers((prev) => prev ? prev.filter((u) => u.id !== deletingUser.id) : prev);
       closeDelete();
     } catch (err: unknown) {
-      const status = (err as { statusCode?: number }).statusCode;
-      const responseData = (err as { responseData?: unknown }).responseData;
+      // api.ts will wrap errors as ApiError with statusCode/responseData
+      const maybe = err as any;
+      const status = maybe?.statusCode ?? maybe?.response?.status;
+      const responseData = maybe?.responseData ?? maybe?.response?.data;
       console.error(`❌ DELETE failed: Status ${status}`, { url: deleteUrl, responseData, err });
-      const msg = (err as { errorMessage?: string }).errorMessage || (err as { message?: string }).message || 'Failed to delete user';
+      const msg = maybe?.errorMessage || maybe?.message || 'Failed to delete user';
       setDeleteError(`${msg} (HTTP ${status || 'unknown'})`);
     } finally {
       setDeleteLoading(false);

@@ -54,17 +54,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const userData = JSON.parse(storedUser) as User;
         const token = userData.token;
 
-        // Check token expiration
-        const expiryDate = new Date(userData.expiresAtUtc);
-        if (expiryDate <= new Date()) {
-          // Token expired
-          localStorage.removeItem('user');
-          localStorage.removeItem('token');
-          setIsLoading(false);
-          return;
-        }
-
-        // Token is valid, set the user
+        // Previously we removed the user if `expiresAtUtc` was past.
+        // Removing that client-side forced-logout to avoid unexpected session drops.
+        // Keep token stored and restore user from localStorage as-is; backend should enforce token validity.
         localStorage.setItem('token', token); // Ensure token is separately stored for API calls
         setUser(userData);
       } catch (error) {

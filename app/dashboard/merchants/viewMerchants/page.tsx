@@ -12,6 +12,7 @@ type MerchantItem = {
   emailAddress?: string | null;
   phoneNumber?: string | null;
   geoLocation?: string | null;
+  merchantCode?: string | null;
   createdAt?: string | Date | null;
 };
 
@@ -71,6 +72,7 @@ export default function ViewMerchantsPage() {
                 <thead className="table-light sticky-top">
                   <tr>
                     <th>Business Name</th>
+                    <th>Merchant Code</th>
                     <th>Email</th>
                     <th>Phone</th>
                     <th>Geo Location</th>
@@ -81,6 +83,7 @@ export default function ViewMerchantsPage() {
                   {merchants.map((m) => (
                     <tr key={m.id}>
                       <td>{m.businessName ?? '—'}</td>
+                      <td style={{ fontFamily: 'monospace', color: '#333' }}>{m.merchantCode ?? '—'}</td>
                       <td>{m.emailAddress ?? '—'}</td>
                       <td>{m.phoneNumber ?? '—'}</td>
                       <td>{m.geoLocation ?? '—'}</td>

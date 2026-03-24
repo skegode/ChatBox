@@ -14,6 +14,8 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
+  // ESLint config: rely on project ESLint rules (we relaxed some rules in eslint.config.mjs)
+  // Remove temporary build bypass so Vercel will run real lint checks.
   // Removed invalid 'trustProxy' option.
 };
 

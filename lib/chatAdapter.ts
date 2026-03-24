@@ -1,5 +1,4 @@
 // lib/chatAdapter.ts
-import { MessageVm as _MessageVm } from "../app/dashboard/[chatId]/page";
 
 type Raw = Record<string, unknown>;
 
@@ -76,7 +75,16 @@ export function normalizeMessages(input: unknown, contactIdFallback?: string): M
     const contactName = firstString(m, ['contactName', 'name', 'senderName', 'displayName']) ?? null;
     const messageText = firstString(m, ['messageText', 'text', 'body', 'message']) ?? null;
     const messageType = firstString(m, ['messageType', 'type', 'mediaType']) ?? null;
-    const mediaPath = firstString(m, ['mediaPath', 'mediaUrl', 'media', 'filePath']) ?? null;
+    let mediaPath = firstString(m, ['mediaPath', 'mediaUrl', 'media', 'filePath']) ?? null;
+    // If backend sometimes returns bare filenames (e.g. "12345.jpg"), normalize to a public uploads path
+    if (mediaPath && typeof mediaPath === 'string') {
+      const looksLikeUrl = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(mediaPath) || mediaPath.startsWith('//');
+      const looksLikeAbsolute = mediaPath.startsWith('/');
+      const hasExt = /\.[a-zA-Z0-9]{2,6}$/.test(mediaPath);
+      if (!looksLikeUrl && !looksLikeAbsolute && hasExt) {
+        mediaPath = `/uploads/${mediaPath}`;
+      }
+    }
     const msgTimeRaw = firstString(m, ['messageDateTime', 'timestamp', 'createdAt', 'time']) ?? new Date().toISOString();
     const messageDateTime = typeof msgTimeRaw === 'string' ? new Date(msgTimeRaw) : new Date();
     const isIncoming = (typeof m['isIncoming'] === 'boolean' ? m['isIncoming'] as boolean : (m['direction'] === 'incoming' || (m['from'] && String(m['from']).toLowerCase() !== 'me'))) as boolean;
