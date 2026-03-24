@@ -689,7 +689,7 @@ function TemplateMessageInput({
                     </thead>
                     <tbody>
                       {contacts.map((contact, idx) => (
-                        <tr key={`contact-row-${contact.id}-${idx}`}>
+                                <tr key={`contact-row-${String(contact.id).replace(/\D/g,'') || contact.id}-${idx}`}>
                           <td>
                             <div className="d-flex align-items-center">
                               <i className="fas fa-user-circle text-muted me-2"></i>
@@ -1077,7 +1077,7 @@ export default function BroadcastPage() {
   const fetchContacts = async () => {
     setLoading(true);
     try {
-      const response = await api.get("api/Messages");
+      const response = await api.get("/api/Messages");
 
       if (Array.isArray(response.data)) {
         const conversations: Conversation[] = response.data;
@@ -1109,7 +1109,7 @@ export default function BroadcastPage() {
 
   const fetchTemplates = async () => {
     try {
-      const response = await api.get("api/Messages/templates");
+      const response = await api.get("/api/Messages/templates");
       setTemplates(response.data || []); 
     } catch (err) {
       console.error("Error fetching templates:", err);

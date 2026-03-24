@@ -24,7 +24,7 @@ export default function ViewMerchantsPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get('api/Merchants');
+    const res = await api.get('/api/Merchants');
       if (Array.isArray(res.data)) {
         setMerchants(res.data);
       } else {

@@ -5,6 +5,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import api from "@/lib/api";
 import { useAuth } from "@/components/providers/AuthProvider";
+import normalizeContactId from '@/lib/normalizeContactId';
 
 type Contact = {
   contactId: string;
@@ -36,22 +37,37 @@ export default function ContactsPage() {
     setLoading(true);
     setError(null);
     try {
-      // Fetch conversations and filter to only those with saved names
-      const response = await api.get("api/Messages");
+      // Try the messages/contacts endpoint first; fallback to Chats if unavailable
+      let response;
+      try {
+        response = await api.get("/api/Messages/contacts");
+      } catch (e: unknown) {
+        // If the endpoint doesn't exist or returns 404, fall back to /api/Chats
+        response = await api.get("/api/Chats");
+      }
+
       if (Array.isArray(response.data)) {
-        // Filter contacts that have a saved name (not just a phone number)
-        const savedContacts = response.data.filter((c: Contact) => {
-          if (!c.contactName) return false;
-          // Check if contactName looks like a phone number
-          const digits = c.contactName.replace(/\D/g, "");
-          const contactDigits = c.contactId?.replace(/\D/g, "") ?? "";
-          // If the name is all digits and matches contactId, it's not a real saved name
-          if (digits && (!contactDigits || digits === contactDigits || digits.endsWith(contactDigits) || contactDigits.endsWith(digits))) {
-            return false;
-          }
-          return true;
+        // Map backend fields to Contact type (be permissive)
+        const contacts = (response.data as Array<Record<string, unknown>>).map((c) => {
+          const first = (keys: string[]) => {
+            for (const k of keys) {
+              const v = c[k];
+              if (v !== undefined && v !== null) return v;
+            }
+            return undefined;
+          };
+
+          const contactIdVal = first(["phoneNumber", "contactId", "phone", "contactWaId", "id"]);
+          const contactId = typeof contactIdVal === "string" ? contactIdVal : typeof contactIdVal === "number" ? String(contactIdVal) : "";
+
+          const contactNameVal = first(["contactName", "name", "displayName", "phoneNumber"]);
+          const contactName = typeof contactNameVal === "string" ? contactNameVal : "";
+
+          const lastMessageTime = first(["receivedAt", "lastMessageAt", "lastMessageTime"]) as string | Date | null;
+
+          return { contactId, contactName, lastMessageTime } as Contact;
         });
-        setContacts(savedContacts);
+        setContacts(contacts);
       } else {
         setContacts([]);
       }
@@ -190,8 +206,8 @@ export default function ContactsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredContacts.map((contact) => (
-                  <tr key={contact.contactId}>
+                {filteredContacts.map((contact, idx) => (
+                  <tr key={`${normalizeContactId(contact.contactId) || 'c'}-${idx}`}>
                     <td style={{ width: 50 }}>
                       <img
                         src="/images/default-avatar.png"

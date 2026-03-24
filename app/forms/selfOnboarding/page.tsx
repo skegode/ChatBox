@@ -332,6 +332,9 @@ export default function SelfOnboardingPage() {
     formData.append('PostalAddress', postalAddress.trim());
     formData.append('PhysicalAddress', physicalAddress.trim());
     formData.append('Consent', String(consent));
+    if (referrerPhone && referrerPhone.trim()) {
+      formData.append('referrerPhone', referrerPhone.trim());
+    }
     
     // Append new device and loan details to FormData
     formData.append('PhoneType', String(phoneType));

@@ -9,29 +9,31 @@ import { useRouter } from 'next/navigation';
 
 type ProspectItem = {
   id: number;
-  name?: string | null; 
-  firstName?: string | null;
-  otherName?: string | null;
-
-  email?: string | null;
-  phone?: string | null;
-  phoneModel?: string | null;
-  county?: string | null;
-  influencerCode?: string | null;
-
-  // new fields from the API
-  influencerName?: string | null;
-  promoCode?: string | null;
-  promoValue?: number | null;
-  promoRedeemed?: boolean | null;
-  promoExpiresAt?: string | Date | null;
-
-  createdAt?: string | Date | null;
+  name?: string | null;
+  firstName: string;
+  otherName: string | null;
+  email: string;
+  phone: string;
+  phoneModel: string;
+  county: string;
+  influencerCode: string | null;
+  influencerName: string;
+  referralSource: 'Merchant' | 'Client' | 'Unknown';
+  referrerName: string;
+  referrerPhone?: string | null;
+  referrerId: number | null;
+  promoCode: string | null;
+  promoValue: number | null;
+  promoRedeemed: boolean | null;
+  promoExpiresAt: string | null;
+  createdAt: string;
+  status: string;
 };
 
 export default function ProspectsPage() {
   const router = useRouter();
   const [items, setItems] = useState<ProspectItem[] | null>(null);
+  const [statusUpdating, setStatusUpdating] = useState<{ [id: number]: boolean }>({});
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,7 +53,7 @@ export default function ProspectsPage() {
       setError(null);
 
       try {
-        const res = await api.get('api/Leads/GetProspects', {
+        const res = await api.get('/api/Leads/GetProspects', {
           params: {
             q: q || undefined,
             page,
@@ -111,7 +113,8 @@ export default function ProspectsPage() {
       phone: p.phone ?? '',
       phoneModel: p.phoneModel ?? '',
       county: p.county ?? '',
-      influencerCode: p.influencerCode ?? '',
+      // Leave influencerCode blank for client referrals (clientreferral API)
+      influencerCode: p.referralSource === 'Client' ? '' : p.influencerCode ?? '',
       influencerName: p.influencerName ?? '',
       promoCode: p.promoCode ?? '',
       promoValue: p.promoValue != null ? String(p.promoValue) : '',
@@ -129,6 +132,30 @@ export default function ProspectsPage() {
       return next;
     });
   }
+
+    // Handler to update status
+    const handleStatusChange = async (id: number, newStatus: string) => {
+      setStatusUpdating((prev) => ({ ...prev, [id]: true }));
+      try {
+        await api.patch(`api/Leads/UpdateProspectStatus`, { id, status: newStatus });
+        setItems((prev) =>
+          prev
+            ? prev.map((item) => (item.id === id ? { ...item, status: newStatus } : item))
+            : prev
+        );
+      } catch (err) {
+        alert('Failed to update status');
+      } finally {
+        setStatusUpdating((prev) => ({ ...prev, [id]: false }));
+      }
+    };
+
+    // Filter out duplicate prospects by id
+    const uniqueItems = items
+      ? items.filter((item, index, self) =>
+          index === self.findIndex((t) => t.id === item.id)
+        )
+      : [];
 
     return (
     <ProtectedRoute requiredPermissions={['adminOnly']} requiredPolicy={PERMISSIONS.POLICY_VIEW_USERS}>
@@ -209,21 +236,73 @@ export default function ProspectsPage() {
                       <th style={{fontSize: '0.85rem'}}>County</th>
                       <th style={{fontSize: '0.85rem'}}>Influencer Code</th>
                       <th style={{fontSize: '0.85rem'}}>Influencer</th>
+                      <th style={{fontSize: '0.85rem'}}>Referral Source</th>
+                      <th style={{fontSize: '0.85rem'}}>Referrer Name</th>
+                      <th style={{fontSize: '0.85rem'}}>Referrer Phone</th>
+                      
+                      <th style={{fontSize: '0.85rem'}}>Status</th>
                       <th style={{fontSize: '0.85rem'}}>Promo</th>
                       <th style={{fontSize: '0.85rem'}}>Created At</th>
                       <th style={{fontSize: '0.85rem'}}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {items.map((p) => (
+                    {uniqueItems.map((p) => (
                       <tr key={p.id} style={{verticalAlign: 'middle'}}>
-                        <td style={{fontSize: '0.9rem'}}>{getDisplayName(p) || '—'}</td>
-                        <td style={{fontSize: '0.85rem'}}>{p.email ?? '—'}</td>
-                        <td style={{fontSize: '0.85rem'}}>{p.phone ?? '—'}</td>
-                        <td style={{fontSize: '0.85rem'}}>{p.phoneModel ?? '—'}</td>
-                        <td style={{fontSize: '0.85rem'}}>{p.county ?? '—'}</td>
-                        <td style={{fontSize: '0.85rem'}}>{p.influencerCode ?? '—'}</td>
-                        <td style={{fontSize: '0.85rem'}}>{p.influencerName ?? '—'}</td>
+                        <td style={{fontSize: '0.9rem'}}>{getDisplayName(p)}</td>
+                        <td style={{fontSize: '0.85rem'}}>{p.email ?? ''}</td>
+                        <td style={{fontSize: '0.85rem'}}>{p.phone ?? ''}</td>
+                        <td style={{fontSize: '0.85rem'}}>{p.phoneModel ?? ''}</td>
+                        <td style={{fontSize: '0.85rem'}}>{p.county ?? ''}</td>
+                        <td style={{fontSize: '0.85rem'}}>{p.referralSource === 'Client' ? '' : (p.influencerCode ?? '')}</td>
+                        <td style={{fontSize: '0.85rem'}}>{p.influencerName ?? ''}</td>
+                        <td style={{fontSize: '0.85rem'}}>
+                          {p.referralSource ? (
+                            <span
+                              style={{
+                                display: 'inline-block',
+                                background:
+                                  p.referralSource.toLowerCase().includes('merchant')
+                                    ? '#e0f7fa'
+                                    : p.referralSource.toLowerCase().includes('client')
+                                    ? '#e3f2fd'
+                                    : '#f3e5f5',
+                                color:
+                                  p.referralSource.toLowerCase().includes('merchant')
+                                    ? '#00796b'
+                                    : p.referralSource.toLowerCase().includes('client')
+                                    ? '#1565c0'
+                                    : '#6a1b9a',
+                                borderRadius: '12px',
+                                padding: '2px 10px',
+                                fontWeight: 600,
+                                fontSize: '0.8em',
+                                letterSpacing: '0.5px',
+                              }}
+                            >
+                              {p.referralSource.charAt(0).toUpperCase() + p.referralSource.slice(1).toLowerCase()}
+                            </span>
+                          ) : null}
+                        </td>
+                        <td style={{fontSize: '0.85rem'}}>{p.referrerName ?? ''}</td>
+                        <td style={{fontSize: '0.85rem'}}>{p.referrerPhone ?? ''}</td>
+                        
+                        <td style={{fontSize: '0.85rem'}}>
+                          <select
+                            value={p.status || ''}
+                            disabled={statusUpdating[p.id]}
+                            onChange={(e) => handleStatusChange(p.id, e.target.value)}
+                            className="form-control form-select"
+                            style={{ fontSize: '0.85rem', minWidth: 100 }}
+                          >
+                            <option value="">Select status</option>
+                            <option value="New">New</option>
+                            <option value="Contacted">Contacted</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Follow Up">Follow Up</option>
+                            <option value="Closed">Closed</option>
+                          </select>
+                        </td>
                         <td style={{width: 220, maxWidth: 220, paddingTop: 8, paddingBottom: 8}}>
                           {p.promoCode ? (
                             <div>
@@ -272,11 +351,11 @@ export default function ProspectsPage() {
                               )}
                             </div>
                           ) : (
-                            <span style={{fontSize: '0.85rem'}}>—</span>
+                            <span style={{fontSize: '0.85rem'}}></span>
                           )}
                         </td>
                         <td style={{fontSize: '0.85rem'}}>
-                          {p.createdAt ? new Date(p.createdAt).toLocaleString() : '—'}
+                          {p.createdAt ? new Date(p.createdAt).toLocaleString() : ''}
                         </td>
                         <td>
                           <button

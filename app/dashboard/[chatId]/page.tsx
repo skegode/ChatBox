@@ -137,14 +137,40 @@ export default function ChatPage() {
     setError(null);
 
     try {
-      const response = await api.get(
-        `api/Messages/contact/${encodeURIComponent(chatId)}`
-      );
-      const data = response.data;
+        // Use the canonical messages-by-contact endpoint.
+        // Try the exact path the frontend expects, with a leading-plus fallback for phone ids.
+        const idRaw = String(chatId || "");
+        const idWithPlus = idRaw.startsWith("+") ? idRaw : `+${idRaw}`;
+        let response = undefined as any;
 
-      if (Array.isArray(data)) {
-        const cleaned = dedupeAndSort(data);
-        setMessages(cleaned);
+        try {
+          // Primary expected shape
+          response = await api.get(`/api/Messages/contact/${encodeURIComponent(idRaw)}`);
+        } catch (err: unknown) {
+          const status = (err as any)?.statusCode ?? (err as any)?.response?.status;
+          if (status === 404) {
+            // Try with leading plus if not found
+            try {
+              response = await api.get(`/api/Messages/contact/${encodeURIComponent(idWithPlus)}`);
+            } catch (err2: unknown) {
+              const status2 = (err2 as any)?.statusCode ?? (err2 as any)?.response?.status;
+              if (status2 === 404) {
+                throw new Error("No messages endpoint matched (404)");
+              }
+              throw err2;
+            }
+          } else {
+            throw err;
+          }
+        }
+
+        const data = response.data;
+
+      if (Array.isArray(data) || data) {
+        // normalize server response to internal MessageVm shape
+        const normalized = (await import('@/lib/chatAdapter')).default.normalizeMessages(data, chatId);
+        const cleaned = dedupeAndSort(normalized as any);
+        setMessages(cleaned as any);
 
         // Determine whether the server-provided contactName is an actual saved name
         if (cleaned.length > 0 && cleaned[0].contactName) {
@@ -192,7 +218,7 @@ export default function ChatPage() {
       const results = await Promise.allSettled(
         messageIds.map((id) =>
           api
-            .get(`api/Messages/status`, { params: { messageId: id } })
+            .get(`/api/Messages/status`, { params: { messageId: id } })
             .then((r) => ({ id, data: r.data }))
             .catch((err) => {
               // Silently ignore 404s — endpoint may not be available

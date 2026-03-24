@@ -1,10 +1,22 @@
 import axios, { AxiosError } from "axios";
 
-// central base URL for API (single source of truth)
-const BASE_API_URL = "https://app.servicesuitecloud.com/WhatsappApi";
+
+// Use env var `NEXT_PUBLIC_API_URL` (recommended) or `REACT_APP_API_BASE_URL` if set.
+// Falls back to the online API when not provided so the UI works without a local backend.
+const DEFAULT_API_URL = "https://app.servicesuitecloud.com/WhatsappApi";
+const ENV_API_URL = typeof process !== 'undefined'
+  ? process.env.NEXT_PUBLIC_API_URL || (process.env as unknown as Record<string, string | undefined>).REACT_APP_API_BASE_URL
+  : undefined;
+
+// Prefer a local API in browser development so you can test changes locally.
+let computedBase = ENV_API_URL || DEFAULT_API_URL;
+if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'production') {
+  computedBase = process.env.NEXT_PUBLIC_LOCAL_API || 'http://localhost:5265';
+}
+const BASE_API_URL = String(computedBase).replace(/\/+$/, "");
 
 // export MEDIA_BASE_URL with a trailing slash so callers can safely append paths
-export const MEDIA_BASE_URL = `${BASE_API_URL.replace(/\/+$/, "")}/`;
+export const MEDIA_BASE_URL = `${BASE_API_URL}/`;
 
 // Create axios instance with proper configuration
 const api = axios.create({
@@ -71,7 +83,15 @@ function getProp(obj: unknown, key: string): unknown | undefined {
 // Add request interceptor for auth and debugging
 api.interceptors.request.use((config) => {
   // Attach JWT token if available
-  const token = typeof localStorage !== "undefined" ? localStorage.getItem("token") : null;
+  let token: string | null = null;
+  if (typeof localStorage !== "undefined") token = localStorage.getItem("token");
+  // fallback: sessionStorage
+  if (!token && typeof sessionStorage !== "undefined") token = sessionStorage.getItem("token");
+  // fallback: cookie named 'token'
+  if (!token && typeof document !== "undefined") {
+    const m = document.cookie.match(new RegExp('(^|; )' + 'token' + '=([^;]+)'));
+    if (m) token = decodeURIComponent(m[2]);
+  }
   if (token) {
     config.headers = config.headers || {};
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment

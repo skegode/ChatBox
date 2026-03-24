@@ -1,6 +1,8 @@
 "use client";
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import api from '@/lib/api';
+import chatAdapter from '@/lib/chatAdapter';
+import normalizeContactId from '@/lib/normalizeContactId';
 
 // Matches GET /api/Messages response (conversation summaries)
 interface Conversation {
@@ -52,17 +54,20 @@ const StatsDashboard = () => {
   const [convoAgentMap, setConvoAgentMap] = useState<Record<string, ConvoAgentInfo>>({});
   const [agentReplyData, setAgentReplyData] = useState<AgentActivity[]>([]);
   const usersMapRef = useRef<Record<number, string>>({});
+  const [previewMessage, setPreviewMessage] = useState<{ text: string; time?: string | null; contactId?: string } | null>(null);
 
   // Full fetch: conversations + users + per-conversation agent data
   const fetchFullStats = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
-      const [messagesRes, usersRes] = await Promise.all([
-        api.get('api/Messages'),
-        api.get('api/Users').catch(() => ({ data: [] })),
+      const [chatsRes, usersRes] = await Promise.all([
+        api.get('/api/Chats'),
+        api.get('/api/Users').catch(() => ({ data: [] })),
       ]);
       if (signal?.aborted) return;
-      const convos: Conversation[] = Array.isArray(messagesRes.data) ? messagesRes.data : [];
+      // Normalize conversation summaries from the Chats endpoint so field names are consistent
+      const rawConvos = Array.isArray(chatsRes.data) ? chatsRes.data : [];
+      const convos = chatAdapter.normalizeConversations(rawConvos) as Conversation[];
       setConversations(convos);
 
       const users: UserInfo[] = Array.isArray(usersRes.data) ? usersRes.data : [];
@@ -83,7 +88,7 @@ const StatsDashboard = () => {
         const batch = convos.slice(i, i + batchSize);
         const results = await Promise.all(
           batch.map(c =>
-            api.get(`api/Messages/contact/${encodeURIComponent(c.contactId)}`)
+              api.get(`/api/Messages/contact/${encodeURIComponent(c.contactId)}`)
               .then(r => ({ contactId: c.contactId, messages: Array.isArray(r.data) ? r.data as MessageDetail[] : [] }))
               .catch(() => ({ contactId: c.contactId, messages: [] as MessageDetail[] }))
           )
@@ -130,9 +135,10 @@ const StatsDashboard = () => {
   // Lightweight refresh: only re-fetch conversation summaries for stat cards
   const fetchSummaryOnly = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await api.get('api/Messages');
+      const res = await api.get('/api/Chats');
       if (signal?.aborted) return;
-      const convos: Conversation[] = Array.isArray(res.data) ? res.data : [];
+      const rawConvos = Array.isArray(res.data) ? res.data : [];
+      const convos = chatAdapter.normalizeConversations(rawConvos) as Conversation[];
       setConversations(convos);
     } catch {
       // Silently ignore — cards keep showing last good data
@@ -632,7 +638,7 @@ const StatsDashboard = () => {
                         [...filteredConversations]
                           .sort((a, b) => new Date(b.lastMessageTime || 0).getTime() - new Date(a.lastMessageTime || 0).getTime())
                           .map(c => (
-                            <tr key={c.contactId}>
+                            <tr key={`${normalizeContactId(c.contactId) || 'c'}-${idx}`}>
                               <td>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                   <div className="stats-avatar">
@@ -643,7 +649,9 @@ const StatsDashboard = () => {
                                   </span>
                                 </div>
                               </td>
-                              <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: c.lastMessageText ? 'pointer' : 'default' }}
+                                  title={c.lastMessageText || ''}
+                                  onClick={() => { if (c.lastMessageText) setPreviewMessage({ text: c.lastMessageText || '', time: c.lastMessageTime || null, contactId: c.contactId }); }}>
                                 {c.lastMessageText || '—'}
                               </td>
                               <td style={{ whiteSpace: 'nowrap' }}>
@@ -723,6 +731,24 @@ const StatsDashboard = () => {
                   </div>
                 )}
               </div>
+              {/* Last message preview modal */}
+              {previewMessage && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.4)' }}>
+                  <div className="bg-white rounded shadow-lg w-full max-w-lg p-4">
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                      <h5 className="mb-0">Last Message Preview</h5>
+                      <button onClick={() => setPreviewMessage(null)} className="btn btn-sm btn-light">Close</button>
+                    </div>
+                    <div style={{ fontSize: '0.95rem', color: '#111' }}>
+                      <div style={{ marginBottom: 8, color: '#6b7280' }}>
+                        {previewMessage.contactId ? `Contact: ${previewMessage.contactId}` : ''}
+                        {previewMessage.time ? ` • ${new Date(previewMessage.time).toLocaleString()}` : ''}
+                      </div>
+                      <div style={{ whiteSpace: 'pre-wrap' }}>{previewMessage.text}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>

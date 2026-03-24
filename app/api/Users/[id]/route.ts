@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const BACKEND_URL = 'https://app.servicesuitecloud.com/WhatsappApi';
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
-  const userId = params.id;
+// Allow `any` for Next route context typing because Next's generated types
+// expect flexible signatures for dynamic route params.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function DELETE(request: Request, context: any) {
+  const params = context?.params ?? {};
+  const userId = String(params.id ?? "");
 
   // Forward the auth token from the incoming request
   const authHeader = request.headers.get('authorization') || '';

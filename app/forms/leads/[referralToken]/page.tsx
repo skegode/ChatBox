@@ -366,25 +366,27 @@ export default function LeadFormPage() {
     if (submitting) return;
 
     const payload = {
-      FirstName: firstName.trim(),
-      OtherName: otherName.trim(),
-      phone: `+254${phone.trim()}`,
+      firstName: firstName.trim(),
+      otherName: otherName.trim(),
       email: email.trim(),
-      phoneModel,
-      county,
-      referralToken: referralToken?.trim() || null,
-      Consent: consent,
+      phone: `+254${phone.trim()}`,
+      phoneModel: Number(phoneModel),
+      county: Number(county),
+      consent: consent,
+      referralToken: referralToken?.trim() || undefined,
     };
 
     try {
       setSubmitting(true);
-      await api.post("/SubmitLead", payload);
+      const res = await api.post("/api/Leads/SubmitClientReferralProspect", payload);
+      const data = res.data;
       setMessage({ text: "Submitted successfully." });
+      // Optionally, display all returned fields below the form
+      setSubmittedProspect(data);
       setFirstName("");
       setOtherName("");
       setPhone("");
       setEmail("");
-      // reset consent after successful submit
       setConsent(false);
     } catch (err: unknown) {
       setMessage({ text: getErrorMessage(err), isError: true });
@@ -392,6 +394,9 @@ export default function LeadFormPage() {
       setSubmitting(false);
     }
   }
+
+  // State to hold submitted prospect details
+  const [submittedProspect, setSubmittedProspect] = useState<unknown | null>(null);
 
   // Consistent styles with dashboard pages
   return (
@@ -578,6 +583,12 @@ export default function LeadFormPage() {
           )}
         </div>
       </form>
+      {submittedProspect && (
+        <div className="mt-4 p-3 bg-light border rounded">
+          <h5>Prospect Details</h5>
+          <pre style={{ fontSize: "0.95em", whiteSpace: "pre-wrap" }}>{JSON.stringify(submittedProspect, null, 2)}</pre>
+        </div>
+      )}
     </div>
   );
 }

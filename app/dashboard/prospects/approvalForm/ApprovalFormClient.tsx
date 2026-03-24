@@ -55,7 +55,7 @@ export default function ApprovalFormClient() {
     let mounted = true;
 
     api
-      .get('api/Merchants')
+      .get('/api/Merchants')
       .then((res) => {
         if (!mounted) return;
         if (Array.isArray(res.data)) {
@@ -75,7 +75,7 @@ export default function ApprovalFormClient() {
       .catch(() => setMerchants([]));
 
     // load lookups for converting to customer
-    api.get('api/Leads/GetPhoneColors')
+    api.get('/api/Leads/GetPhoneColors')
       .then((res) => {
         if (!mounted) return;
         if (Array.isArray(res.data)) {
@@ -89,7 +89,7 @@ export default function ApprovalFormClient() {
       })
       .catch(() => setColors([]));
 
-    api.get('api/Leads/GetPhoneMemory')
+    api.get('/api/Leads/GetPhoneMemory')
       .then((res) => {
         if (!mounted) return;
         if (Array.isArray(res.data)) {
@@ -103,7 +103,7 @@ export default function ApprovalFormClient() {
       })
       .catch(() => setMemories([]));
 
-    api.get('api/Leads/GetPhoneState')
+    api.get('/api/Leads/GetPhoneState')
       .then((res) => {
         if (!mounted) return;
         if (Array.isArray(res.data)) {
@@ -156,7 +156,7 @@ export default function ApprovalFormClient() {
 
     setLoading(true);
     try {
-      await api.post('api/Leads/ConvertToCustomer', {
+      await api.post('/api/Leads/ConvertToCustomer', {
         LeadId: Number(prospectId),
         MerchantId: merchantId,
         DevicePrice: Number(devicePrice),

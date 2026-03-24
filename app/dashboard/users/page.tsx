@@ -67,7 +67,7 @@ export default function UsersPage() {
         const errData = await res.json().catch(() => ({}));
         throw { statusCode: res.status, errorMessage: errData?.error || `Delete failed (${res.status})`, responseData: errData };
       }
-      console.log(`✅ DELETE successful: Status ${res.status}`, res.data);
+      console.log(`✅ DELETE successful: Status ${res.status}`);
       setUsers((prev) => prev ? prev.filter((u) => u.id !== deletingUser.id) : prev);
       closeDelete();
     } catch (err: unknown) {
@@ -111,7 +111,7 @@ export default function UsersPage() {
     setError(null);
 
     try {
-      const res = await api.get('api/Users');
+      const res = await api.get('/api/Users');
       if (Array.isArray(res.data)) {
         setUsers(res.data);
       } else {
@@ -138,8 +138,8 @@ export default function UsersPage() {
     setLoadingDropdowns(true);
     try {
       const [rolesRes, deptsRes] = await Promise.all([
-        api.get('api/Users/roles'),
-        api.get('api/Users/departments')
+        api.get('/api/Users/roles'),
+        api.get('/api/Users/departments')
       ]);
       
       if (Array.isArray(rolesRes.data)) {
@@ -206,7 +206,7 @@ export default function UsersPage() {
         roleID: editRoleId,
         departmentID: editDepartmentId
       };
-      const res = await api.put(`api/Users/${editingUser.id}`, payload);
+      const res = await api.put(`/api/Users/${editingUser.id}`, payload);
       
       // Find role and department names from their IDs for the optimistic update
       const roleName = roles.find(r => r.id === editRoleId)?.name ?? null;

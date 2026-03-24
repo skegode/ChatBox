@@ -7,6 +7,7 @@ import React from 'react';
 import { Check, CheckCheck } from 'lucide-react';
 import type { Conversation } from './ChatList';
 import Avatar from '../ui/Avatar';
+import StableImage from './StableImage';
 
 function formatDate(input?: string | Date | null) {
   if (!input) return '—';
@@ -44,6 +45,12 @@ type ConversationWithAvatar = Conversation & {
   avatarUrl?: string;
 };
 
+// Extend conversation with last media preview fields (may be added at runtime)
+type ConversationWithMedia = Conversation & {
+  lastMediaPath?: string | null;
+  lastMessageType?: string | null;
+};
+
 // helper to detect phone-like strings so we don't treat a returned phone as a saved name
 function digitsOnly(s?: string) {
   return (s ?? '').replace(/\D/g, '');
@@ -58,7 +65,7 @@ function looksLikePhoneName(candidate?: string, contactId?: string) {
   return a === b || a.endsWith(b) || b.endsWith(a);
 }
 
-export default function ChatItem({ chat }: { chat: Conversation }) {
+function ChatItemInner({ chat }: { chat: Conversation }) {
   // Prefer saved contact name; if backend returned a phone in contactName treat it as unsaved
   const rawName = chat?.contactName ?? undefined;
   const isPhoneLike = looksLikePhoneName(rawName, chat?.contactId);
@@ -115,7 +122,26 @@ export default function ChatItem({ chat }: { chat: Conversation }) {
               )}
             </span>
           )}
-          <span className="text-truncate">{truncateText(chat?.lastMessageText ?? 'No messages yet', 25)}</span>
+          {/* If there is an image/media preview, show a small thumbnail */}
+          {((chat as ConversationWithMedia).lastMediaPath) ? (
+            (() => {
+              const mp = (chat as ConversationWithMedia).lastMediaPath as string | null | undefined;
+              const mt = (chat as ConversationWithMedia).lastMessageType ?? '';
+              const isImage = !!mp && (/(\.jpg|\.jpeg|\.png|\.gif|\.webp)$/i.test(mp) || String(mt).toLowerCase().includes('image'));
+              if (isImage && mp) {
+                // Route image requests through the server proxy to avoid CORS/auth issues
+                // Keep proxy URL stable (no changing query params).
+                const proxySrc = `/api/image/proxy?url=${encodeURIComponent(mp)}`;
+                return (
+                  <StableImage src={proxySrc} alt="preview" className="me-2 rounded" style={{ width: 36, height: 36, objectFit: 'cover' }} />
+                );
+              }
+              // Non-image attachments: show an icon/label
+              return <span className="me-2 small text-muted">[Attachment]</span>;
+            })()
+          ) : (
+            <span className="text-truncate">{truncateText(chat?.lastMessageText ?? 'No messages yet', 25)}</span>
+          )}
         </p>
       </div>
       <div className="font-size-11">{formatDate(lastAt)}</div>
@@ -127,3 +153,21 @@ export default function ChatItem({ chat }: { chat: Conversation }) {
     </div>
   );
 }
+
+// Memoize ChatItem to avoid unnecessary re-renders which can cause image reloads.
+function areEqual(prev: { chat: Conversation }, next: { chat: Conversation }) {
+  const a = prev.chat;
+  const b = next.chat;
+  // Compare only the fields that affect visual output and the image preview.
+  return (
+    a.id === b.id &&
+    a.contactId === b.contactId &&
+    a.contactName === b.contactName &&
+    a.lastMessageText === b.lastMessageText &&
+    (a as any).lastMediaPath === (b as any).lastMediaPath &&
+    a.lastMessageTime === b.lastMessageTime &&
+    (a.unreadCount ?? 0) === (b.unreadCount ?? 0)
+  );
+}
+
+export default React.memo(ChatItemInner, areEqual);

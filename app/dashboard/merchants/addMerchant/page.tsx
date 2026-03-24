@@ -27,7 +27,7 @@ export default function AddMerchantPage() {
     setError(null);
     setSuccess(null);
     try {
-      const res = await api.post('api/Merchants', {
+      const res = await api.post('/api/Merchants', {
         businessName: form.businessName,
         emailAddress: form.emailAddress,
         phoneNumber: form.phoneNumber,

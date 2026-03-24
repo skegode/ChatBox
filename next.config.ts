@@ -3,18 +3,18 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   /* config options here */
   images: {
-    domains: [
-      "developer.nvidia.com",
-      "coral.ai",
-      "store.arduino.cc",
-      "www.raspberrypi.com",
-      "img.freepik.com"
+    remotePatterns: [
+      { protocol: 'https', hostname: 'developer.nvidia.com' },
+      { protocol: 'https', hostname: 'coral.ai' },
+      { protocol: 'https', hostname: 'store.arduino.cc' },
+      { protocol: 'https', hostname: 'www.raspberrypi.com' },
+      { protocol: 'https', hostname: 'img.freepik.com' },
     ],
   },
-  // Add this to trust proxy headers (for correct protocol/host in SSR)
-  trustProxy: true,
+  turbopack: {
+    root: __dirname,
+  },
+  // Removed invalid 'trustProxy' option.
 };
 
 module.exports = nextConfig;
-
-export default nextConfig;

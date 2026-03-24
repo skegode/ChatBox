@@ -35,7 +35,7 @@ export default function InfluencersPage() {
       setError(null);
 
       try {
-        const res = await api.get('api/Influencers', {
+        const res = await api.get('/api/Influencers', {
           params: {
             q: q || undefined,
             page,
