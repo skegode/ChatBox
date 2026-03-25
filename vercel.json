@@ -4,8 +4,8 @@
     { "src": "next.config.js", "use": "@vercel/next" }
   ],
   "env": {
-    "NEXT_PUBLIC_API_URL": "",
-    "BACKEND_URL": ""
+    "NEXT_PUBLIC_API_URL": "https://your.production.frontend.api",
+    "BACKEND_URL": "https://your.backend.api"
   },
   "functions": {
     "api/**/*.js": {
