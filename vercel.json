@@ -1,15 +1,12 @@
 {
   "version": 2,
-  "builds": [
-    { "src": "next.config.js", "use": "@vercel/next" }
-  ],
   "env": {
     "NEXT_PUBLIC_API_URL": "https://your.production.frontend.api",
     "BACKEND_URL": "https://your.backend.api"
   },
-  "functions": {
-    "api/**/*.js": {
-      "maxDuration": 10
-    }
+  "public": true,
+  "env": {
+    "BACKEND_URL": "https://app.servicesuitecloud.com/WhatsappApi",
+    "NEXT_PUBLIC_API_URL": "https://app.servicesuitecloud.com/WhatsappApi"
   }
 }
