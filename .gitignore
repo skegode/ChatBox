@@ -49,3 +49,4 @@ node_modules
 out
 .env
 prisma/dev.db
+.env*.local

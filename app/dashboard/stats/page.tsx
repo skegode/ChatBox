@@ -53,6 +53,7 @@ const StatsDashboard = () => {
   const [usersMap, setUsersMap] = useState<Record<number, string>>({});
   const [convoAgentMap, setConvoAgentMap] = useState<Record<string, ConvoAgentInfo>>({});
   const [agentReplyData, setAgentReplyData] = useState<AgentActivity[]>([]);
+  const [agentLoading, setAgentLoading] = useState(true);
   const usersMapRef = useRef<Record<number, string>>({});
   const [previewMessage, setPreviewMessage] = useState<{ text: string; time?: string | null; contactId?: string } | null>(null);
 
@@ -79,17 +80,48 @@ const StatsDashboard = () => {
       setUsersMap(map);
       usersMapRef.current = map;
 
+      // Mark UI as ready with conversation summaries while we fetch per-conversation details in background
+      if (!signal?.aborted) setLoading(false);
+
       const agentInfo: Record<string, ConvoAgentInfo> = {};
       const agentReplyCounter: Record<number, { name: string; lastReply: string; count: number }> = {};
 
-      const batchSize = 5;
+      // Reduce concurrent calls to avoid overloading backend; fetch in small batches and update UI incrementally
+      const batchSize = 3;
+      const perRequestTimeout = 7000; // ms
+      setAgentLoading(true);
+      const fetchWithTimeout = (url: string, timeoutMs: number, signal?: AbortSignal) => {
+        return new Promise<any>((resolve, reject) => {
+          if (signal?.aborted) return reject(new Error('aborted'));
+          const timer = setTimeout(() => reject(new Error('timeout')), timeoutMs);
+          api.get(url)
+            .then(r => {
+              clearTimeout(timer);
+              resolve(r);
+            })
+            .catch(err => {
+              clearTimeout(timer);
+              reject(err);
+            });
+          if (signal) {
+            signal.addEventListener('abort', () => {
+              clearTimeout(timer);
+              reject(new Error('aborted'));
+            }, { once: true });
+          }
+        });
+      };
+
       for (let i = 0; i < convos.length; i += batchSize) {
-        if (signal?.aborted) return;
+        if (signal?.aborted) {
+          setAgentLoading(false);
+          return;
+        }
         const batch = convos.slice(i, i + batchSize);
         const results = await Promise.all(
           batch.map(c =>
-              api.get(`/api/Messages/contact/${encodeURIComponent(c.contactId)}`)
-              .then(r => ({ contactId: c.contactId, messages: Array.isArray(r.data) ? r.data as MessageDetail[] : [] }))
+            fetchWithTimeout(`/api/Messages/contact/${encodeURIComponent(c.contactId)}`, perRequestTimeout, signal)
+              .then((r: any) => ({ contactId: c.contactId, messages: Array.isArray(r.data) ? r.data as MessageDetail[] : [] }))
               .catch(() => ({ contactId: c.contactId, messages: [] as MessageDetail[] }))
           )
         );
@@ -116,18 +148,22 @@ const StatsDashboard = () => {
             }
           }
         }
-      }
-      if (signal?.aborted) return;
-      setConvoAgentMap(agentInfo);
 
-      const activityList: AgentActivity[] = Object.entries(agentReplyCounter)
-        .map(([id, data]) => ({ agentId: Number(id), agentName: data.name, lastReply: data.lastReply, replyCount: data.count }))
-        .sort((a, b) => new Date(b.lastReply).getTime() - new Date(a.lastReply).getTime());
-      setAgentReplyData(activityList);
+        // Merge partial results into UI so users see activity gradually
+        if (!signal?.aborted) {
+          setConvoAgentMap(prev => ({ ...prev, ...agentInfo }));
+          const activityList: AgentActivity[] = Object.entries(agentReplyCounter)
+            .map(([id, data]) => ({ agentId: Number(id), agentName: data.name, lastReply: data.lastReply, replyCount: data.count }))
+            .sort((a, b) => new Date(b.lastReply).getTime() - new Date(a.lastReply).getTime());
+          setAgentReplyData(activityList);
+        }
+      }
+      setAgentLoading(false);
     } catch (e) {
       console.error('Failed to fetch stats', e);
       if (!signal?.aborted) setConversations([]);
     } finally {
+      // Ensure loading is false in case of errors and if it wasn't already turned off
       if (!signal?.aborted) setLoading(false);
     }
   }, []);
@@ -701,7 +737,16 @@ const StatsDashboard = () => {
                     {agentReplyData.length} agents
                   </span>
                 </div>
-                {agentReplyData.length === 0 ? (
+                {agentLoading ? (
+                  <div className="text-center py-3">
+                    <div className="d-flex align-items-center justify-content-center gap-3">
+                      <span className="pulse-loader"></span>
+                      <span className="pulse-loader" style={{ animationDelay: '0.3s' }}></span>
+                      <span className="pulse-loader" style={{ animationDelay: '0.6s' }}></span>
+                    </div>
+                    <p className="stats-subtitle" style={{ marginTop: 8 }}>Loading agent activity...</p>
+                  </div>
+                ) : agentReplyData.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: '32px 0' }}>
                     <i className="ri-user-search-line stats-empty-icon"></i>
                     No agent replies found.

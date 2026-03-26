@@ -98,6 +98,13 @@ api.interceptors.request.use((config) => {
     // @ts-ignore - axios header typing can be strict here
     config.headers["Authorization"] = `Bearer ${token}`;
   }
+  // If the request targets server auth endpoints, route it to the same-origin proxy
+  if (config.url && typeof config.url === 'string' && config.url.startsWith('/api/Auth')) {
+    // rewrite path to our proxy route and force same-origin by clearing baseURL
+    config.url = config.url.replace(/^\/api\/Auth/, '/api/proxy/auth');
+    config.baseURL = '';
+  }
+
   console.log(`📤 API Request: ${String(config.method).toUpperCase()} ${config.baseURL}${config.url}`);
   return config;
 });
