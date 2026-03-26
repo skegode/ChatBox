@@ -9,11 +9,13 @@ async function proxyHandler(req: NextRequest) {
 		// Determine upstream path by removing the /api/proxy prefix
 		const url = new URL(req.url);
 		const rel = url.pathname.replace(/^\/api\/proxy/, '');
-		const upstream = DEFAULT_BACKEND.replace(/\/+$/, '') + rel + (url.search || '');
+		// If the client requested /api/proxy/Chats (no '/api' after proxy),
+		// most backend endpoints live under '/api/*' so ensure we preserve that.
+		const relWithApi = rel.startsWith('/api') ? rel : '/api' + rel;
+		const upstream = DEFAULT_BACKEND.replace(/\/+$/, '') + relWithApi + (url.search || '');
 
 		const init: RequestInit = {
 			method: req.method,
-			headers: {} as Record<string, string>,
 			// forward body for non-GET/HEAD
 			body: undefined,
 			redirect: 'follow',
@@ -21,9 +23,11 @@ async function proxyHandler(req: NextRequest) {
 
 		// Copy headers except host and some hop-by-hop headers
 		const skip = new Set(['host', 'connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailer', 'transfer-encoding', 'upgrade']);
+		const forwardHeaders: Record<string, string> = {};
 		req.headers.forEach((value, key) => {
-			if (!skip.has(key.toLowerCase())) init.headers![key] = value;
+			if (!skip.has(key.toLowerCase())) forwardHeaders[key] = value;
 		});
+		init.headers = forwardHeaders;
 
 		if (req.method !== 'GET' && req.method !== 'HEAD') {
 			try {
