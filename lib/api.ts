@@ -99,10 +99,14 @@ api.interceptors.request.use((config) => {
     config.headers["Authorization"] = `Bearer ${token}`;
   }
   // If the request targets server auth endpoints, route it to the same-origin proxy
-  if (config.url && typeof config.url === 'string' && config.url.startsWith('/api/Auth')) {
-    // rewrite path to our proxy route and force same-origin by clearing baseURL
-    config.url = config.url.replace(/^\/api\/Auth/, '/api/proxy/auth');
-    config.baseURL = '';
+  // Route all same-origin API calls through our proxy in production/preview so we avoid CORS
+  if (config.url && typeof config.url === 'string' && config.url.startsWith('/api/')) {
+    // Avoid double-rewriting if already targeting the proxy
+    if (!config.url.startsWith('/api/proxy')) {
+      // /api/Chats -> /api/proxy/Chats (proxy will forward to upstream)
+      config.url = config.url.replace(/^\/api\//, '/api/proxy/');
+      config.baseURL = '';
+    }
   }
 
   console.log(`📤 API Request: ${String(config.method).toUpperCase()} ${config.baseURL}${config.url}`);
