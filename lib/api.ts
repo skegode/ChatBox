@@ -13,11 +13,12 @@ const ENV_API_URL = typeof process !== 'undefined'
 // - Browser: prefer same-origin (empty base) so relative client calls hit our proxy and avoid CORS.
 let computedBase = ENV_API_URL || DEFAULT_API_URL;
 if (typeof window !== 'undefined') {
-  // Running in the browser — prefer same-origin unless an explicit NEXT_PUBLIC_API_URL is set.
-  computedBase = ENV_API_URL || '';
-  if (process.env.NODE_ENV !== 'production') {
-    // In local dev allow NEXT_PUBLIC_LOCAL_API to override so developers can target local backend.
-    computedBase = process.env.NEXT_PUBLIC_LOCAL_API || computedBase || 'http://localhost:5265';
+  // Running in the browser: force same-origin in production so the client hits our proxy
+  // and avoids CORS. In local development, allow NEXT_PUBLIC_LOCAL_API to point to a local backend.
+  if (process.env.NODE_ENV === 'production') {
+    computedBase = '';
+  } else {
+    computedBase = process.env.NEXT_PUBLIC_LOCAL_API || ENV_API_URL || '' || 'http://localhost:5265';
   }
 }
 const BASE_API_URL = String(computedBase || '').replace(/\/+$/, "");
