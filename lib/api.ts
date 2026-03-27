@@ -8,15 +8,22 @@ const ENV_API_URL = typeof process !== 'undefined'
   ? process.env.NEXT_PUBLIC_API_URL || (process.env as unknown as Record<string, string | undefined>).REACT_APP_API_BASE_URL
   : undefined;
 
-// Prefer a local API in browser development so you can test changes locally.
+// Choose base URL differently for server vs browser:
+// - Server-side (SSR): keep absolute upstream so server requests reach the backend.
+// - Browser: prefer same-origin (empty base) so relative client calls hit our proxy and avoid CORS.
 let computedBase = ENV_API_URL || DEFAULT_API_URL;
-if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'production') {
-  computedBase = process.env.NEXT_PUBLIC_LOCAL_API || 'http://localhost:5265';
+if (typeof window !== 'undefined') {
+  // Running in the browser — prefer same-origin unless an explicit NEXT_PUBLIC_API_URL is set.
+  computedBase = ENV_API_URL || '';
+  if (process.env.NODE_ENV !== 'production') {
+    // In local dev allow NEXT_PUBLIC_LOCAL_API to override so developers can target local backend.
+    computedBase = process.env.NEXT_PUBLIC_LOCAL_API || computedBase || 'http://localhost:5265';
+  }
 }
-const BASE_API_URL = String(computedBase).replace(/\/+$/, "");
+const BASE_API_URL = String(computedBase || '').replace(/\/+$/, "");
 
 // export MEDIA_BASE_URL with a trailing slash so callers can safely append paths
-export const MEDIA_BASE_URL = `${BASE_API_URL}/`;
+export const MEDIA_BASE_URL = BASE_API_URL ? `${BASE_API_URL}/` : '/';
 
 // Create axios instance with proper configuration
 const api = axios.create({
