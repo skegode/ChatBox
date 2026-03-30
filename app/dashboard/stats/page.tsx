@@ -126,6 +126,28 @@ const StatsDashboard = () => {
           )
         );
         for (const { contactId, messages } of results) {
+          // Ensure conversation preview shows a sensible last message
+          if (messages && messages.length > 0) {
+            // sort messages by date desc
+            const msgsSorted = messages.slice().sort((a, b) => new Date((b as any).messageDateTime).getTime() - new Date((a as any).messageDateTime).getTime());
+            const lastMsg = msgsSorted[0];
+            // derive preview text: prefer text fields if available, otherwise media indicator
+            let previewText = (lastMsg as any).messageText ?? (lastMsg as any).text ?? null;
+            if (!previewText) {
+              const mp = (lastMsg as any).mediaPath ?? (lastMsg as any).mediaUrl ?? '';
+              const mt = ((lastMsg as any).messageType || '').toString().toLowerCase();
+              if (mp || mt.includes('image')) previewText = '[Image]';
+              else if (mt.includes('video')) previewText = '[Video]';
+              else if (mt.includes('audio')) previewText = '[Audio]';
+              else if (mt.includes('pdf')) previewText = '[Document]';
+              else previewText = null;
+            }
+            const lastTime = (lastMsg as any).messageDateTime ?? null;
+            if (previewText || lastTime) {
+              // update conversations state so the table shows the preview immediately
+              setConversations(prev => prev.map(cc => cc.contactId === contactId ? { ...cc, lastMessageText: previewText ?? cc.lastMessageText, lastMessageTime: lastTime ?? cc.lastMessageTime } : cc));
+            }
+          }
           const outgoing = messages
             .filter((m: MessageDetail) => !m.isIncoming && m.sentBy)
             .sort((a: MessageDetail, b: MessageDetail) => new Date(b.messageDateTime).getTime() - new Date(a.messageDateTime).getTime());
