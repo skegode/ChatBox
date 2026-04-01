@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import ErrorMessage from '../../../components/ui/ErrorMessage';
 import { useAuth } from '../../../components/providers/AuthProvider';
 import { ApiError, isApiError } from '../../../lib/api';
 
-export default function LoginPage() {
+function LoginForm() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(false);
@@ -170,5 +170,13 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   );
 }

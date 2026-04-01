@@ -648,7 +648,7 @@ export default function ChatPage() {
         throw lastError;
       }
 
-      if (response?.status >= 200 && response?.status < 300) {
+      if ((response as { status?: number } | null)?.status !== undefined && (response as { status: number }).status >= 200 && (response as { status: number }).status < 300) {
         setQuote(null);
         setMessages(
           (prev) => prev?.filter((m) => m.messageId !== tempId) || null

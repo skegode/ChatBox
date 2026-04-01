@@ -188,6 +188,10 @@ export default function ChatList() {
                 const key = normalizeContactId(ch.contactId) || ch.contactId;
                 const p = previewsCache[key] || previewsCache[ch.contactId];
                 if (!p) return ch;
+                const rawStatus = ch.lastMessageStatus ?? p.lastMessageStatus ?? ch.lastMessageStatus;
+                const safeStatus = (rawStatus === 'sent' || rawStatus === 'delivered' || rawStatus === 'read' || rawStatus == null)
+                  ? rawStatus as 'sent' | 'delivered' | 'read' | null | undefined
+                  : undefined;
                 return {
                   ...ch,
                   lastMessageText: ch.lastMessageText ?? p.lastMessageText ?? ch.lastMessageText,
@@ -195,8 +199,8 @@ export default function ChatList() {
                   lastMediaPath: ch.lastMediaPath ?? p.lastMediaPath ?? ch.lastMediaPath,
                   lastMessageType: ch.lastMessageType ?? p.lastMessageType ?? ch.lastMessageType,
                   lastMessageDirection: ch.lastMessageDirection ?? p.lastMessageDirection ?? ch.lastMessageDirection,
-                  lastMessageStatus: ch.lastMessageStatus ?? p.lastMessageStatus ?? ch.lastMessageStatus,
-                };
+                  lastMessageStatus: safeStatus,
+                } as Conversation;
               }));
             }
           }

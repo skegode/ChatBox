@@ -168,7 +168,7 @@ export async function GET(req: Request) {
     });
 
     // Start with the first candidate but we'll iterate through uniqCandidates when fetching
-    let remoteUrl = uniqCandidates[0] || raw;
+    let remoteUrl: string = uniqCandidates[0] || raw || '';
 
     // Validate URL
     try {
