@@ -1,4 +1,4 @@
-// import './globals.css';
+import './globals.css';
 import {AuthProvider} from '../components/providers/AuthProvider';
 import {ThemeProvider} from '../components/providers/ThemeProvider';
 
@@ -16,6 +16,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta content="Service Suite Customer Service Box" name="description" />
         <meta content="Themesbrand" name="author" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
         {/* App favicon */}
         <link rel="shortcut icon" href="/images/icon.png" />
         {/* magnific-popup css */}
@@ -29,13 +32,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link href="/css/icons.min.css" rel="stylesheet" type="text/css" />
         {/* App Css */}
         <link href="/css/app.min.css" id="app-style" rel="stylesheet" type="text/css" />
-        {/* Dark Navy Theme */}
-        <link href="/css/dark-theme.css" rel="stylesheet" type="text/css" id="dark-theme-style" />
-        {/* Light Theme Overrides (always loaded, scoped via body[data-theme="light"]) */}
-        <link href="/css/light-theme.css" rel="stylesheet" type="text/css" />
 
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css" />
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" async></script>
+        {/* WA theme — loaded LAST so it wins over Bootstrap + app.min.css */}
+        <link href="/css/custom/wa-theme.css" rel="stylesheet" type="text/css" />
       </head>
       <body>
         <ThemeProvider>

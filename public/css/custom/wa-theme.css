@@ -1,0 +1,313 @@
+/* ─────────────────────────────────────────────────────────────────
+   WhatsApp-inspired theme overrides
+   Loaded LAST in <head> so these win over Bootstrap + app.min.css
+   ───────────────────────────────────────────────────────────────── */
+
+/* Design tokens */
+:root {
+  --wa-green-900: #075e54;
+  --wa-green-700: #0b806f;
+  --wa-green-600: #128c7e;
+  --wa-green-500: #1fa885;
+  --wa-mint-200:  #dcf8c6;
+  --wa-ink-900:   #1f2c34;
+  --wa-ink-700:   #3b4a54;
+  --wa-ink-500:   #667781;
+  --wa-border:    #d9e0e4;
+  --wa-surface:        #ffffff;
+  --wa-surface-soft:   #f6f8f9;
+  --wa-bg:             #e9edef;
+}
+
+body[data-theme='dark'] {
+  --wa-bg:           #111b21;
+  --wa-surface:      #202c33;
+  --wa-surface-soft: #182229;
+  --wa-border:       #2f3b43;
+  --wa-ink-900:      #e9edef;
+  --wa-ink-700:      #c8d1d6;
+  --wa-ink-500:      #8fadb9;
+  --wa-mint-200:     #005c4b;
+}
+
+/* ── Global ── */
+body {
+  font-family: 'Plus Jakarta Sans', 'Segoe UI', system-ui, -apple-system, sans-serif !important;
+  background: var(--wa-bg) !important;
+  color: var(--wa-ink-900) !important;
+}
+
+/* ── Overall layout wrapper ── */
+.layout-wrapper {
+  background: var(--wa-bg) !important;
+}
+
+/* ── Sidebar (icon rail) ── */
+.side-menu {
+  background: linear-gradient(180deg, var(--wa-green-900) 0%, var(--wa-green-700) 100%) !important;
+  border-right: 1px solid rgba(255,255,255,0.14) !important;
+}
+
+.side-menu .nav-link,
+.side-menu .nav-item button {
+  color: rgba(255,255,255,0.85) !important;
+  border-radius: 12px !important;
+}
+
+.side-menu .nav-link.active,
+.side-menu .nav-item button.nav-link.active,
+.side-menu .nav-link:hover,
+.side-menu .nav-item button:hover {
+  background: rgba(255,255,255,0.18) !important;
+  color: #fff !important;
+}
+
+/* ── Left chat sidebar ── */
+.chat-leftsidebar {
+  background: var(--wa-surface) !important;
+  border: 1px solid var(--wa-border) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 8px 24px rgba(15,31,42,0.06) !important;
+  color: var(--wa-ink-900) !important;
+}
+
+/* Chat header title */
+.chat-leftsidebar .px-4 h4 {
+  color: var(--wa-ink-900) !important;
+  font-weight: 700 !important;
+}
+
+/* ── Search box ── */
+.chat-search-box .input-group-text,
+.search-box .input-group-text {
+  background: var(--wa-surface-soft) !important;
+  border-color: var(--wa-border) !important;
+  border-radius: 20px 0 0 20px !important;
+}
+
+.chat-search-box .form-control,
+.search-box .form-control {
+  border-radius: 0 20px 20px 0 !important;
+  background: var(--wa-surface-soft) !important;
+  border-color: var(--wa-border) !important;
+  font-size: 14px !important;
+}
+
+/* ── Chat list items ── */
+.chat-list li a,
+.chat-list > li > a {
+  display: block !important;
+  padding: 10px 14px !important;
+  border-radius: 10px !important;
+  color: var(--wa-ink-900) !important;
+  border-bottom: none !important;
+  transition: background 0.15s ease !important;
+}
+
+.chat-list li a:hover { background: var(--wa-surface-soft) !important; }
+
+.chat-list li.active a,
+.chat-list li a.active {
+  background: rgba(18,140,126,0.12) !important;
+}
+
+.chat-user-message {
+  color: var(--wa-ink-500) !important;
+  font-size: 13.5px !important;
+}
+
+.unread-message .badge {
+  background: var(--wa-green-600) !important;
+  color: #fff !important;
+}
+
+/* ── Chat conversation (message area) ── */
+.chat-conversation {
+  background: var(--wa-bg) !important;
+}
+
+/* ── Chat header (contact topbar) ── */
+.user-chat-topbar {
+  background: var(--wa-surface) !important;
+  border-bottom: 1px solid var(--wa-border) !important;
+}
+
+.user-chat-topbar h5 {
+  color: var(--wa-ink-900) !important;
+  font-weight: 600 !important;
+}
+
+/* ── Chat right panel ── */
+.user-chat {
+  background: var(--wa-bg) !important;
+}
+
+/* ── Message input bar ── */
+.chat-input-section {
+  background: var(--wa-surface) !important;
+  border-top: 1px solid var(--wa-border) !important;
+}
+
+.chat-input-section .form-control {
+  border-radius: 20px !important;
+  background: var(--wa-surface-soft) !important;
+  border-color: var(--wa-border) !important;
+  font-size: 15px !important;
+  padding: 10px 16px !important;
+}
+
+/* ── Message bubbles ── */
+.ctext-wrap-content {
+  background: var(--wa-surface) !important;
+  border: 1px solid transparent !important;
+  border-radius: 0 12px 12px 12px !important;
+  padding: 8px 12px 6px !important;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.10) !important;
+  color: var(--wa-ink-900) !important;
+  font-size: 14.5px !important;
+  line-height: 1.45 !important;
+  word-break: break-word;
+}
+
+li.right .ctext-wrap-content {
+  background: var(--wa-mint-200) !important;
+  border-radius: 12px 0 12px 12px !important;
+}
+
+/* Quote inside bubble */
+.ctext-wrap-content .card {
+  background: rgba(0,0,0,0.05) !important;
+  border: none !important;
+  border-left: 3px solid var(--wa-green-600) !important;
+  border-radius: 6px !important;
+}
+
+.chat-time {
+  color: var(--wa-ink-500) !important;
+  font-size: 11px !important;
+}
+
+/* ── Cards ── */
+.card {
+  background: var(--wa-surface) !important;
+  border: 1px solid var(--wa-border) !important;
+  border-radius: 14px !important;
+  color: var(--wa-ink-900) !important;
+}
+
+/* ── Buttons ── */
+.btn-primary,
+.btn.btn-primary,
+.btn-outline-primary:hover {
+  background: var(--wa-green-600) !important;
+  border-color: var(--wa-green-600) !important;
+  color: #fff !important;
+}
+
+.btn-primary:hover,
+.btn.btn-primary:hover {
+  background: var(--wa-green-500) !important;
+  border-color: var(--wa-green-500) !important;
+}
+
+.btn-outline-primary {
+  color: var(--wa-green-600) !important;
+  border-color: var(--wa-green-600) !important;
+}
+
+/* ── Form controls ── */
+.form-control,
+.form-select {
+  background: var(--wa-surface-soft) !important;
+  border-color: var(--wa-border) !important;
+  color: var(--wa-ink-900) !important;
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--wa-green-500) !important;
+  box-shadow: 0 0 0 0.2rem rgba(18,140,126,0.18) !important;
+}
+
+.input-group-text {
+  background: var(--wa-surface-soft) !important;
+  border-color: var(--wa-border) !important;
+  color: var(--wa-ink-500) !important;
+}
+
+/* ── Tables ── */
+.table thead th {
+  background: rgba(18,140,126,0.08) !important;
+  border-bottom: 1px solid var(--wa-border) !important;
+  color: var(--wa-ink-700) !important;
+}
+
+.table tbody td {
+  border-bottom: 1px solid var(--wa-border) !important;
+  color: var(--wa-ink-900) !important;
+}
+
+/* ── Login page ── */
+.account-pages {
+  background: var(--wa-bg) !important;
+}
+
+.account-pages .card {
+  border-radius: 16px !important;
+  box-shadow: 0 4px 24px rgba(15,31,42,0.10) !important;
+}
+
+/* ── Modals ── */
+.modal-content {
+  background: var(--wa-surface) !important;
+  border: 1px solid var(--wa-border) !important;
+  border-radius: 14px !important;
+}
+
+.modal-header {
+  background: var(--wa-surface) !important;
+  border-bottom: 1px solid var(--wa-border) !important;
+}
+
+.modal-body   { background: var(--wa-surface) !important; }
+.modal-footer {
+  background: var(--wa-surface) !important;
+  border-top: 1px solid var(--wa-border) !important;
+}
+
+/* ── Dropdowns ── */
+.dropdown-menu {
+  background: var(--wa-surface) !important;
+  border: 1px solid var(--wa-border) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.10) !important;
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus {
+  background: var(--wa-surface-soft) !important;
+  color: var(--wa-ink-900) !important;
+}
+
+/* ── Attachment / quote cards ── */
+.attachment-card,
+.quote-card {
+  background: var(--wa-surface-soft) !important;
+  border: 1px solid var(--wa-border) !important;
+  border-radius: 10px !important;
+}
+
+/* ── Welcome screen ── */
+.welcome-icon-box {
+  background: rgba(18,140,126,0.12) !important;
+  border-color: rgba(18,140,126,0.35) !important;
+}
+
+.welcome-title    { color: var(--wa-ink-900) !important; font-weight: 800 !important; }
+.welcome-subtitle { color: var(--wa-ink-500) !important; }
+
+/* ── Scrollbars ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--wa-border); border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: var(--wa-ink-500); }

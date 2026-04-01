@@ -38,6 +38,19 @@ async function proxyHandler(req: NextRequest) {
 			}
 		}
 
+		const shouldLogSendFailure =
+			req.method === 'POST' &&
+			(/\/api\/Messages\/send$/i.test(relWithApi) || /\/api\/Messages$/i.test(relWithApi));
+
+		if (shouldLogSendFailure) {
+			console.log('[proxy] Forwarding send request', {
+				upstream,
+				method: req.method,
+				authHeaderPresent: Boolean(forwardHeaders['authorization']),
+				cookieHeaderPresent: Boolean(forwardHeaders['cookie']),
+			});
+		}
+
 		const res = await fetch(upstream, init);
 
 		// Build response headers to return to client
@@ -49,6 +62,16 @@ async function proxyHandler(req: NextRequest) {
 		});
 
 		const body = await res.arrayBuffer();
+		if (shouldLogSendFailure && res.status >= 400) {
+			const bodyText = Buffer.from(body).toString('utf8');
+			console.error('[proxy] Send request failed', {
+				upstream,
+				status: res.status,
+				contentType: res.headers.get('content-type') || '',
+				bodyPreview: bodyText.slice(0, 1000),
+			});
+		}
+
 		return new Response(body.byteLength ? Buffer.from(body) : null, {
 			status: res.status,
 			headers: resHeaders,

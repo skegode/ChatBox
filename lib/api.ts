@@ -136,38 +136,80 @@ api.interceptors.response.use(
       const config = ae.config;
       const method = (config?.method || "UNKNOWN").toString().toUpperCase();
       const url = config?.url;
-
-      if (status) {
-        console.error(`❌ API Error: ${status} from ${method} ${url}`);
-      } else {
-        console.error(`❌ API Error from ${method} ${url}`);
-      }
-
-      if (data) {
-        if (typeof data === "object" && data !== null) {
-          const errorMsg = getStringProp(data, "error");
-          const message = getStringProp(data, "message");
-          const validationErrors = getProp(data, "errors");
-
-          if (errorMsg) console.error("Error message:", errorMsg);
-          if (message) console.error("Message:", message);
-          if (validationErrors) console.error("Validation errors:", validationErrors);
-          console.error("Full error payload:", data);
-        } else {
-          console.error("Error response:", data);
+      // Attempt silent token refresh on 401 once, then retry original request
+      try {
+        const originalConfig = config as any;
+        if (status === 401 && originalConfig && !originalConfig._retry) {
+          originalConfig._retry = true;
+          // call refresh endpoint through proxy; must set credentials if backend uses cookies
+          return fetch('/api/Auth/refresh', { method: 'POST', credentials: 'include' })
+            .then(async (res) => {
+              if (!res.ok) throw new Error('Refresh failed');
+              let body: any = {};
+              try { body = await res.json(); } catch (e) { body = {}; }
+              const newToken = getStringProp(body, 'token') || getStringProp(body, 'accessToken') || (body && (body as any).token);
+              if (newToken && typeof window !== 'undefined') {
+                try { localStorage.setItem('token', String(newToken)); } catch (e) { /* ignore */ }
+                // update axios instance default header so subsequent requests include token
+                (api.defaults.headers as any) = (api.defaults.headers as any) || {};
+                (api.defaults.headers as any)['Authorization'] = `Bearer ${newToken}`;
+                // ensure the original request includes new header
+                originalConfig.headers = originalConfig.headers || {};
+                originalConfig.headers['Authorization'] = `Bearer ${newToken}`;
+              }
+              return api.request(originalConfig);
+            })
+            .catch((e) => {
+              // Refresh failed: clear client-side auth and redirect to login
+              try { if (typeof localStorage !== 'undefined') { localStorage.removeItem('token'); localStorage.removeItem('user'); } } catch (e) {}
+              if (typeof window !== 'undefined') window.location.href = '/login';
+              const apiErr = new ApiError('Unauthorized', { statusCode: 401, responseData: data, config });
+              return Promise.reject(apiErr);
+            });
         }
-      } else {
-        console.error("No response data");
+      } catch (ex) {
+        // ignore refresh attempt failures and continue to normal error handling below
+        console.error('Token refresh attempt failed:', ex);
       }
+        // For 404s and expected client errors, avoid noisy full-body dumps.
+        if (status) {
+          const level = status >= 500 ? console.error : console.warn;
+          level(`❌ API Error: ${status} from ${method} ${url}`);
 
-      if (["POST", "PUT", "PATCH"].includes(method)) {
-        console.error("Request payload:", config?.data);
-      }
+          // For server errors log more context; for client errors keep it concise.
+          if (status >= 500) {
+            if (data) {
+              try {
+                const summary = typeof data === 'string' ? String(data).slice(0, 200) : JSON.stringify(data);
+                console.error('Full error payload (truncated):', summary);
+              } catch (e) {
+                console.error('Error reading payload');
+              }
+            } else {
+              console.error('No response data');
+            }
+          } else {
+            // For 4xx (including 404) avoid printing HTML pages or large bodies.
+            if (status === 404) {
+              console.warn('Resource not found (404). This may be expected for some contacts.');
+            } else if (data && typeof data === 'object') {
+              const errorMsg = getStringProp(data, 'error') || getStringProp(data, 'message');
+              if (errorMsg) console.warn('API message:', errorMsg);
+            }
+          }
+        } else {
+          console.warn(`❌ API Error from ${method} ${url}`);
+        }
+
+        // If there is a request payload for mutating requests, log it at debug level (warn here)
+        if (["POST", "PUT", "PATCH"].includes(method) && config?.data) {
+          console.warn('Request payload (truncated):', String(config.data).slice(0, 200));
+        }
 
       const derivedMessage =
-        (getStringProp(data, "error") || getStringProp(data, "message")) ||
+        (getStringProp(data, 'error') || getStringProp(data, 'message')) ||
         ae.message ||
-        "Unknown API error";
+        'Unknown API error';
 
       const apiErr = new ApiError(String(derivedMessage), {
         statusCode: status,

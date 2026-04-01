@@ -2,7 +2,7 @@
 // app/dashboard/[chatId]/page.tsx
 
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import MessageBubble from "../../../components/chat/MessageBubble";
 import MessageInput from "../../../components/chat/MessageInput";
@@ -12,13 +12,19 @@ import { PERMISSIONS } from "@/lib/permissions";
 import axios from "axios";
 
 // Match your backend MessageViewModel
+type ChatMessageType = "text" | "image" | "video" | "audio" | "pdf" | "document";
+
 type MessageVm = {
   id: number;
   messageId?: string | null;
+  messageType: ChatMessageType;
+  mediaId?: string | null;
+  mediaFileName?: string | null;
+  fileName?: string | null;
+  mediaUrl?: string | null;
   contactName?: string | null;
   contactWaId: string;
   messageText?: string | null;
-  messageType?: string | null;
   mediaPath?: string | null;
   messageDateTime: string | Date;
   isIncoming: boolean;
@@ -46,7 +52,31 @@ interface SendMessagePayload {
   MediaId?: string;
   MediaType?: string;
   MediaLocalPath?: string;
+  MediaUrl?: string;
+  FileName?: string;
   MediaFileName?: string;
+  contactId?: string;
+  text?: string;
+  contextMessageId?: string;
+  mediaId?: string;
+  mediaType?: string;
+  mediaLocalPath?: string;
+  mediaUrl?: string;
+  fileName?: string;
+  mediaFileName?: string;
+  To?: string;
+  to?: string;
+  PhoneNumber?: string;
+  phoneNumber?: string;
+  Body?: string;
+  body?: string;
+  From?: string;
+  from?: string;
+  message?: string;
+  Recipient?: string;
+  recipient?: string;
+  ContactWaId?: string;
+  contactWaId?: string;
 }
 
 interface StatusPayload {
@@ -68,6 +98,66 @@ function contactNameLooksLikePhone(candidate?: string, contactId?: string) {
   return a === b || a.endsWith(b) || b.endsWith(a);
 }
 
+function buildContactIdVariants(contactId?: string) {
+  const raw = String(contactId ?? "").trim();
+  const digits = digitsOnly(raw);
+  const plus = digits ? `+${digits}` : "";
+  return Array.from(new Set([raw, digits, plus].filter(Boolean)));
+}
+
+function inferMediaTypeFromFile(file: File): string {
+  const mime = String(file.type || "").toLowerCase();
+  if (mime.startsWith("image/")) return "image";
+  if (mime.startsWith("video/")) return "video";
+  if (mime.startsWith("audio/")) return "audio";
+  if (mime === "application/pdf") return "pdf";
+  return "document";
+}
+
+function normalizeOutboundMediaType(v?: string | null, file?: File | null): ChatMessageType {
+  const raw = String(v ?? "").toLowerCase().trim();
+  if (raw === "image" || raw === "video" || raw === "audio" || raw === "pdf" || raw === "document") {
+    return raw;
+  }
+  if (file) {
+    const inferred = inferMediaTypeFromFile(file);
+    if (inferred === "image" || inferred === "video" || inferred === "audio" || inferred === "pdf") {
+      return inferred;
+    }
+  }
+  return "document";
+}
+
+function getErrorStatus(err: unknown): number | undefined {
+  if (axios.isAxiosError(err)) return err.response?.status;
+  if (err && typeof err === "object" && "statusCode" in err) {
+    const statusCode = (err as { statusCode?: unknown }).statusCode;
+    if (typeof statusCode === "number") return statusCode;
+  }
+  return undefined;
+}
+
+function getErrorMessage(err: unknown): string {
+  if (axios.isAxiosError(err)) {
+    return (
+      err.response?.data?.error ||
+      err.response?.data?.message ||
+      err.message ||
+      ""
+    );
+  }
+  if (err && typeof err === "object") {
+    const maybe = err as { message?: unknown; errorMessage?: unknown };
+    if (typeof maybe.errorMessage === "string" && maybe.errorMessage.trim()) {
+      return maybe.errorMessage;
+    }
+    if (typeof maybe.message === "string" && maybe.message.trim()) {
+      return maybe.message;
+    }
+  }
+  return "";
+}
+
 export default function ChatPage() {
   const params = useParams();
   const chatId = params?.chatId as string | undefined;
@@ -84,12 +174,16 @@ export default function ChatPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const router = useRouter();
-  const { user, isAuthenticated, checkPolicy } = useAuth();
+  const { user, isAuthenticated, isLoading, checkPolicy } = useAuth();
   const canViewAllChats = checkPolicy(PERMISSIONS.POLICY_VIEW_ALL_CHATS);
 
   useEffect(() => {
+    if (isLoading) {
+      return;
+    }
+
     if (!isAuthenticated) {
-      router.push("/login");
+      router.replace("/login");
       return;
     }
 
@@ -99,7 +193,7 @@ export default function ChatPage() {
     } else {
       setError(null);
     }
-  }, [chatId, isAuthenticated, router]);
+  }, [chatId, isAuthenticated, isLoading, router]);
 
   const buildMsgKey = (m: MessageVm) => {
     if (m.messageId) return String(m.messageId);
@@ -215,27 +309,32 @@ export default function ChatPage() {
   const fetchStatuses = async (messageIds: string[]) => {
     if (!messageIds || messageIds.length === 0) return;
     try {
-      const results = await Promise.allSettled(
-        messageIds.map((id) =>
-          api
-            .get(`/api/Messages/status`, { params: { messageId: id } })
-            .then((r) => ({ id, data: r.data }))
-            .catch((err) => {
-              // Silently ignore 404s — endpoint may not be available
-              if (err?.statusCode === 404 || err?.response?.status === 404) return { id, data: null };
-              throw err;
-            })
-        )
-      );
+      // Batch in groups of 10 to avoid flooding the backend
+      const batchSize = 10;
+      for (let i = 0; i < messageIds.length; i += batchSize) {
+        const batch = messageIds.slice(i, i + batchSize);
+        const results = await Promise.allSettled(
+          batch.map((id) =>
+            api
+              .get(`/api/Messages/status`, { params: { messageId: id } })
+              .then((r) => ({ id, data: r.data }))
+              .catch((err) => {
+                if (err?.statusCode === 404 || err?.response?.status === 404) return { id, data: null };
+                throw err;
+              })
+          )
+        );
 
-      setStatusMap((prev) => {
-        const next = { ...prev };
-        for (const res of results) {
-          if (res.status === "fulfilled") {
-            const id = res.value.id;
-            const payload: StatusPayload = res.value.data;
-            if (payload) {
-              if (String(payload.status).toLowerCase() === "read") {
+        setStatusMap((prev) => {
+          const next = { ...prev };
+          for (const res of results) {
+            if (res.status === "fulfilled") {
+              const id = res.value.id;
+              const payload: StatusPayload = res.value.data;
+              // Mark IDs even when endpoint returns null/404 so we do not refetch forever.
+              if (!payload) {
+                next[id] = "sent";
+              } else if (String(payload.status).toLowerCase() === "read") {
                 next[id] = "read";
               } else if (payload.delivered) {
                 next[id] = "delivered";
@@ -243,29 +342,47 @@ export default function ChatPage() {
                 next[id] = "sent";
               }
             }
-          } else {
-            console.warn("Status check failed", res.reason);
           }
-        }
-        return next;
-      });
+          return next;
+        });
+      }
     } catch (e) {
       console.error("Error fetching message statuses", e);
     }
   };
 
+  // Reset all state immediately when chatId changes so the UI is clean before fetch
+  const prevChatIdRef = useRef(chatId);
+  useEffect(() => {
+    if (chatId !== prevChatIdRef.current) {
+      prevChatIdRef.current = chatId;
+      setMessages(null);
+      setContactInfo(null);
+      setStatusMap({});
+      setError(null);
+      setQuote(null);
+      setContextMenu(null);
+      setInitialLoading(true);
+    }
+  }, [chatId]);
+
   useEffect(() => {
     if (!chatId) return;
     fetchConversation(true);
 
-    const interval = setInterval(() => fetchConversation(false), 5000);
+    const interval = setInterval(() => fetchConversation(false), 15000);
     return () => clearInterval(interval);
   }, [chatId]);
 
   useEffect(() => {
     if (!messages || messages.length === 0) return;
     const toCheck = messages
-      .filter((m) => !m.isIncoming && m.messageId)
+      .filter(
+        (m) =>
+          !m.isIncoming &&
+          m.messageId &&
+          !String(m.messageId).startsWith("temp-")
+      )
       .map((m) => String(m.messageId))
       .filter((id) => !(id in statusMap));
 
@@ -277,42 +394,133 @@ export default function ChatPage() {
   const handleSendMessage = async (text: string, file?: File | null) => {
     if (!chatId) return false;
     try {
-      const phoneNumber = (chatId || "").replace(/^\+/, "");
+      const hasFile = Boolean(file);
+      const inputText = String(text ?? "");
+      const hasText = inputText.trim().length > 0;
+      if (!hasFile && !hasText) return false;
 
-      let messageText = text;
-      const payload: SendMessagePayload = {
+      const phoneNumber = digitsOnly(chatId || "");
+      const contactIdVariants = buildContactIdVariants(chatId);
+      const recipientDigits = digitsOnly(chatId || "");
+      const recipientPlus = recipientDigits ? `+${recipientDigits}` : "";
+
+      let messageText = hasText ? inputText : "";
+      const payloadBase: SendMessagePayload = {
         ContactId: phoneNumber,
-        MessageText: "",
+        MessageText: messageText,
       };
 
       if (quote?.messageId) {
-        payload.ContextMessageId = quote.messageId;
+        payloadBase.ContextMessageId = quote.messageId;
       } else if (quote?.body) {
-        messageText = `> ${quote.body}\n\n${text}`;
+        messageText = hasText ? `> ${quote.body}\n\n${inputText}` : "";
       }
-      payload.MessageText = messageText;
+
+      payloadBase.MessageText = messageText;
+      payloadBase.contactId = phoneNumber;
+      payloadBase.text = messageText;
+      payloadBase.Body = messageText;
+      payloadBase.body = messageText;
+      payloadBase.message = messageText;
+      if (payloadBase.ContextMessageId) {
+        payloadBase.contextMessageId = payloadBase.ContextMessageId;
+      }
 
       let mediaMeta: {
-        fileName: string;
         mediaId: string;
-        mediaType?: string;
-        mediaLocalPath?: string;
+        mediaType: ChatMessageType;
+        mediaFileName: string;
+        fileName: string;
+        mediaPath: string;
+        mediaUrl?: string;
       } | null = null;
 
-      if (file) {
+      if (hasFile && file) {
         const fd = new FormData();
         fd.append("file", file);
+
         const mediaResp = await api.post("/api/Messages/media", fd);
-        mediaMeta = mediaResp?.data;
-        if (!mediaMeta || !mediaMeta.mediaId) {
+        const envelope = mediaResp?.data as Record<string, unknown> | null;
+        const rawMeta =
+          envelope && typeof envelope.data === "object" && envelope.data !== null
+            ? (envelope.data as Record<string, unknown>)
+            : envelope;
+
+        const mediaId =
+          typeof rawMeta?.mediaId === "string"
+            ? rawMeta.mediaId
+            : typeof rawMeta?.MediaId === "string"
+            ? rawMeta.MediaId
+            : typeof rawMeta?.attachmentId === "string"
+            ? rawMeta.attachmentId
+            : typeof rawMeta?.id === "string"
+            ? rawMeta.id
+            : "";
+
+        const mediaFileName =
+          (typeof rawMeta?.mediaFileName === "string" && rawMeta.mediaFileName) ||
+          (typeof rawMeta?.MediaFileName === "string" && rawMeta.MediaFileName) ||
+          (typeof rawMeta?.fileName === "string" && rawMeta.fileName) ||
+          (typeof rawMeta?.FileName === "string" && rawMeta.FileName) ||
+          file.name;
+
+        const mediaPath =
+          (typeof rawMeta?.mediaPath === "string" && rawMeta.mediaPath) ||
+          (typeof rawMeta?.MediaPath === "string" && rawMeta.MediaPath) ||
+          (typeof rawMeta?.mediaLocalPath === "string" && rawMeta.mediaLocalPath) ||
+          (typeof rawMeta?.MediaLocalPath === "string" && rawMeta.MediaLocalPath) ||
+          (typeof rawMeta?.path === "string" && rawMeta.path) ||
+          "";
+
+        const mediaUrl =
+          (typeof rawMeta?.mediaUrl === "string" && rawMeta.mediaUrl) ||
+          (typeof rawMeta?.MediaUrl === "string" && rawMeta.MediaUrl) ||
+          undefined;
+
+        if (!mediaId || !mediaPath || !mediaFileName) {
           throw new Error("Media upload failed");
         }
 
+        mediaMeta = {
+          mediaId,
+          mediaType: normalizeOutboundMediaType(
+            (typeof rawMeta?.mediaType === "string" && rawMeta.mediaType) ||
+              (typeof rawMeta?.MediaType === "string" && rawMeta.MediaType) ||
+              (typeof rawMeta?.mimeType === "string" && rawMeta.mimeType) ||
+              null,
+            file
+          ),
+          mediaFileName,
+          fileName: mediaFileName,
+          mediaPath,
+          mediaUrl,
+        };
+      }
+
+      const payload: SendMessagePayload = { ...payloadBase };
+      if (mediaMeta) {
         payload.MediaId = mediaMeta.mediaId;
-        if (mediaMeta.mediaType) payload.MediaType = mediaMeta.mediaType;
-        if (mediaMeta.mediaLocalPath)
-          payload.MediaLocalPath = mediaMeta.mediaLocalPath;
-        if (mediaMeta.fileName) payload.MediaFileName = mediaMeta.fileName;
+        payload.mediaId = mediaMeta.mediaId;
+        payload.MediaType = mediaMeta.mediaType;
+        payload.mediaType = mediaMeta.mediaType;
+        payload.MediaFileName = mediaMeta.mediaFileName;
+        payload.mediaFileName = mediaMeta.mediaFileName;
+        payload.FileName = mediaMeta.fileName;
+        payload.fileName = mediaMeta.fileName;
+        payload.MediaLocalPath = mediaMeta.mediaPath;
+        payload.mediaLocalPath = mediaMeta.mediaPath;
+        if (mediaMeta.mediaUrl) {
+          payload.MediaUrl = mediaMeta.mediaUrl;
+          payload.mediaUrl = mediaMeta.mediaUrl;
+        }
+
+        if (!hasText) {
+          payload.MessageText = "";
+          payload.text = "";
+          payload.Body = "";
+          payload.body = "";
+          payload.message = "";
+        }
       }
 
       const tempId = `temp-${Date.now()}`;
@@ -356,15 +564,26 @@ export default function ChatPage() {
           }
         }
       }
+
+      const senderPhone =
+        user && "phoneNumber" in user && typeof user.phoneNumber === "string"
+          ? user.phoneNumber.trim()
+          : "";
+      const senderDigits = digitsOnly(senderPhone);
+      const senderPlus = senderDigits ? `+${senderDigits}` : senderPhone;
         
       const optimisticMessage: MessageVm = {
         id: 0,
         messageId: tempId,
+        messageType: mediaMeta ? mediaMeta.mediaType : "text",
+        mediaId: mediaMeta?.mediaId ?? null,
+        mediaFileName: mediaMeta?.mediaFileName ?? null,
+        fileName: mediaMeta?.fileName ?? null,
+        mediaUrl: mediaMeta?.mediaUrl ?? null,
         contactName: contactInfo?.name || null,
         contactWaId: phoneNumber,
         messageText: messageText,
-        messageType: file ? mediaMeta?.mediaType ?? "media" : "text",
-        mediaPath: mediaMeta?.mediaLocalPath ?? null,
+        mediaPath: mediaMeta?.mediaPath ?? null,
         messageDateTime: new Date(),
         isIncoming: false,
         contextMessageId: quote?.messageId || null,
@@ -375,16 +594,66 @@ export default function ChatPage() {
         prev ? [...prev, optimisticMessage] : [optimisticMessage]
       );
 
-      const response = await api.post("/api/Messages/send", payload, {
-        headers: { "Content-Type": "application/json" },
-      });
+      let response = null as Awaited<ReturnType<typeof api.post>> | null;
+      let lastError: unknown = null;
+      const endpoints = ["/api/Messages/send", "/api/Messages"];
+
+      for (const endpoint of endpoints) {
+        for (const contactIdVariant of contactIdVariants) {
+          try {
+            const attemptPayload: SendMessagePayload = {
+              ...payload,
+              ContactId: contactIdVariant,
+              contactId: contactIdVariant,
+              To: recipientPlus || contactIdVariant,
+              to: recipientPlus || contactIdVariant,
+              Recipient: recipientPlus || contactIdVariant,
+              recipient: recipientPlus || contactIdVariant,
+              ContactWaId: recipientPlus || contactIdVariant,
+              contactWaId: recipientPlus || contactIdVariant,
+              PhoneNumber: recipientDigits || contactIdVariant,
+              phoneNumber: recipientDigits || contactIdVariant,
+              From: senderPlus,
+              from: senderPlus,
+            };
+
+            response = await api.post(endpoint, attemptPayload);
+            break;
+          } catch (err) {
+            lastError = err;
+
+            const status = getErrorStatus(err);
+            const apiMessage = getErrorMessage(err);
+
+            if (!status) {
+              throw err;
+            }
+
+            const shouldRetry =
+              (status === 400 || status === 401 || status === 404) &&
+              /send failed|invalid|not found|unauthorized/i.test(apiMessage);
+
+            if (!shouldRetry) {
+              throw err;
+            }
+          }
+        }
+
+        if (response) {
+          break;
+        }
+      }
+
+      if (!response && lastError) {
+        throw lastError;
+      }
 
       if (response?.status >= 200 && response?.status < 300) {
         setQuote(null);
-        await fetchConversation(false);
         setMessages(
           (prev) => prev?.filter((m) => m.messageId !== tempId) || null
         );
+        await fetchConversation(false);
         return true;
       } else {
         console.error("Send message returned non-success status", response);
@@ -490,7 +759,8 @@ export default function ChatPage() {
               <div className="d-flex align-items-center">
                 <div className="d-block d-lg-none me-2 ms-0">
                   <a
-                    href="javascript: void(0);"
+                    href="#"
+                    onClick={(e) => { e.preventDefault(); router.push('/dashboard'); }}
                     className="user-chat-remove text-muted font-size-16 p-2"
                   >
                     <i className="ri-arrow-left-s-line" />
@@ -574,54 +844,7 @@ export default function ChatPage() {
                   ? statusMap[String(m.messageId)] ?? "sent"
                   : "sent";
 
-                const rawPath = m.mediaPath ?? "";
-                const fileName = rawPath
-                  ? rawPath.replace(/\\/g, "/").split("/").pop()
-                  : null;
-
-                const mediaUrl = fileName
-                  ? `${MEDIA_BASE_URL}api/Messages/media?path=${encodeURIComponent(
-                      fileName
-                    )}`
-                  : undefined;
-
-                const ext = fileName
-                  ? fileName.split(".").pop()?.toLowerCase()
-                  : undefined;
-                let inferredType =
-                  (m.messageType || "").toLowerCase() || undefined;
-                if (!inferredType || inferredType === "media") {
-                  if (
-                    ext &&
-                    [
-                      "jpg",
-                      "jpeg",
-                      "png",
-                      "gif",
-                      "webp",
-                      "bmp",
-                      "svg",
-                    ].includes(ext)
-                  )
-                    inferredType = "image";
-                  else if (
-                    ext &&
-                    ["mp4", "webm", "ogg", "mov", "mkv"].includes(ext)
-                  )
-                    inferredType = "video";
-                  else if (
-                    ext &&
-                    ["mp3", "wav", "m4a", "aac", "oga"].includes(ext)
-                  )
-                    inferredType = "audio";
-                  else if (ext === "pdf") inferredType = "pdf";
-                  else if (
-                    ext &&
-                    ["doc", "docx", "docm", "dot", "dotx"].includes(ext)
-                  )
-                    inferredType = "document";
-                  else if (ext) inferredType = "document";
-                }
+                const messageType = m.messageType || "text";
 
                 const quotedMessage = m.contextMessageId
                   ? messages.find(
@@ -643,13 +866,18 @@ export default function ChatPage() {
                     <MessageBubble
                       message={{
                         id: uniqueKey,
+                        messageId: m.messageId ?? null,
                         body: m.messageText ?? "",
                         timestamp: new Date(m.messageDateTime),
                         status: uiStatus,
                         direction: m.isIncoming ? "incoming" : "outgoing",
                         chatId: chatId || "",
-                        mediaPath: mediaUrl ?? undefined,
-                        messageType: inferredType,
+                        mediaPath: m.mediaPath ?? undefined,
+                        mediaUrl: m.mediaUrl ?? undefined,
+                        mediaId: m.mediaId ?? undefined,
+                        mediaFileName: m.mediaFileName ?? undefined,
+                        fileName: m.fileName ?? undefined,
+                        messageType,
                         senderName: !m.isIncoming ? m.senderName : null,
                       }}
                       quotedText={quotedMessage?.messageText ?? null}

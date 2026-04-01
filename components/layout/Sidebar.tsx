@@ -92,12 +92,12 @@ export default function Sidebar() {
           <h4 className="mb-3">User Management</h4>
           <ul className='list-unstyled chat-list'>
             <li>
-              <Link href="/dashboard/users/register" className="border-top">
+              <Link href="/dashboard/users/register" prefetch={false} className="border-top">
                 <i className="ri-user-add-line me-2" />Register New User
               </Link>
             </li>
             <li>
-              <Link href="/dashboard/users" className="border-top">
+              <Link href="/dashboard/users" prefetch={false} className="border-top">
                 <i className="ri-group-line me-2" />View Users
               </Link>
             </li>
@@ -116,12 +116,12 @@ export default function Sidebar() {
             <h4 className="mb-3">Merchant Management</h4>
             <ul className='list-unstyled chat-list'>
               <li>
-                <Link href="/dashboard/merchants/addMerchant" className="border-top">
+                <Link href="/dashboard/merchants/addMerchant" prefetch={false} className="border-top">
                   <i className="ri-function-add-line me-2" />Add Merchant
                 </Link>
               </li>
               <li>
-                <Link href="/dashboard/merchants/viewMerchants" className="border-top">
+                <Link href="/dashboard/merchants/viewMerchants" prefetch={false} className="border-top">
                   <i className="ri-function-line me-2" />View Merchants
                 </Link>
               </li>
@@ -136,17 +136,17 @@ export default function Sidebar() {
             <h4 className="mb-3">Prospect Management</h4>
             <ul className='list-unstyled chat-list'>
               <li>
-                <Link href="/dashboard/prospects" className="border-top">
+                <Link href="/dashboard/prospects" prefetch={false} className="border-top">
                   <i className="ri-user-star-line me-2"></i>View Prospects
                 </Link>
               </li>
               <li>
-                <Link href="/dashboard/prospects/customers" className="border-top">
+                <Link href="/dashboard/prospects/customers" prefetch={false} className="border-top">
                   <i className="ri-user-follow-line me-2"></i>Converted Customers
                 </Link>
               </li>
               <li>
-                <Link href="/dashboard/selfOnboardedBorrowers" className="border-top">
+                <Link href="/dashboard/selfOnboardedBorrowers" prefetch={false} className="border-top">
                   <i className="ri-user-received-2-line me-2"></i>Self-Onboarded
                 </Link>
               </li>
@@ -160,12 +160,12 @@ export default function Sidebar() {
             <h4 className="mb-3">Influencer Management</h4>
             <ul className='list-unstyled chat-list'>
               <li>
-                <Link href="/dashboard/influencers" className="border-top">
+                <Link href="/dashboard/influencers" prefetch={false} className="border-top">
                   <i className="ri-group-line me-2"></i>View Influencers
                 </Link>
               </li>
               <li>
-                <Link href="/dashboard/influencers/addInfluencer" className="border-top">
+                <Link href="/dashboard/influencers/addInfluencer" prefetch={false} className="border-top">
                   <i className="ri-user-add-line me-2"></i>Add Influencer
                 </Link>
               </li>
@@ -201,7 +201,7 @@ export default function Sidebar() {
         </div>
         <div className="flex-lg-column my-auto">
           <ul className="nav nav-pills side-menu-nav justify-content-center" role="tablist">
-            <Link href="/dashboard" className="nav-item" data-bs-toggle="tooltip" data-bs-trigger="hover" data-bs-placement="right" aria-label="Chats" title='Chats'>
+            <Link href="/dashboard" prefetch={false} className="nav-item" data-bs-toggle="tooltip" data-bs-trigger="hover" data-bs-placement="right" aria-label="Chats" title='Chats'>
               <button
                 onClick={() => { setActiveSection('chats'); setOpenDropdown(null); }}
                 className={`${activeSection === 'chats' ? activeClass : inactiveClass}`}
@@ -210,7 +210,7 @@ export default function Sidebar() {
               </button>
             </Link>
 
-            <Link href="/dashboard/contacts" className="nav-item" data-bs-toggle="tooltip" data-bs-trigger="hover" data-bs-placement="right" aria-label="Contacts" title='Contacts'>
+            <Link href="/dashboard/contacts" prefetch={false} className="nav-item" data-bs-toggle="tooltip" data-bs-trigger="hover" data-bs-placement="right" aria-label="Contacts" title='Contacts'>
               <button
                 onClick={() => { setActiveSection('contacts'); setOpenDropdown(null); }}
                 className={`${activeSection === 'contacts' ? activeClass : inactiveClass}`}
@@ -233,7 +233,7 @@ export default function Sidebar() {
             )}
 
             {isAdmin && (
-              <Link href="/dashboard/merchants/viewMerchants" data-bs-toggle="tooltip" data-bs-trigger="hover" data-bs-placement="right" aria-label="Merchants" title="Merchants" className="nav-item">
+              <Link href="/dashboard/merchants/viewMerchants" prefetch={false} data-bs-toggle="tooltip" data-bs-trigger="hover" data-bs-placement="right" aria-label="Merchants" title="Merchants" className="nav-item">
                 <button
                   onClick={() => { setActiveSection('merchants'); setOpenDropdown(null); }}
                   className={`${activeSection === 'merchants' ? activeClass : inactiveClass}`}
@@ -244,7 +244,7 @@ export default function Sidebar() {
             )}
 
             {isAdmin && (
-              <Link href="/dashboard/prospects" data-bs-toggle="tooltip" data-bs-trigger="hover" data-bs-placement="right" aria-label="Prospects" title="Prospects" className="nav-item">
+              <Link href="/dashboard/prospects" prefetch={false} data-bs-toggle="tooltip" data-bs-trigger="hover" data-bs-placement="right" aria-label="Prospects" title="Prospects" className="nav-item">
                 <button
                   onClick={() => { setActiveSection('prospects'); setOpenDropdown(null); }}
                   className={`${activeSection === 'prospects' ? activeClass : inactiveClass}`}
@@ -255,7 +255,7 @@ export default function Sidebar() {
             )}
 
             {isAdmin && (
-              <Link href="/dashboard/influencers" data-bs-toggle="tooltip" data-bs-trigger="hover" data-bs-placement="right" aria-label="Influencers" title="Influencers" className="nav-item">
+              <Link href="/dashboard/influencers" prefetch={false} data-bs-toggle="tooltip" data-bs-trigger="hover" data-bs-placement="right" aria-label="Influencers" title="Influencers" className="nav-item">
                 <button
                   onClick={() => { setActiveSection('influencers'); setOpenDropdown(null); }}
                   className={`${activeSection === 'influencers' ? activeClass : inactiveClass}`}
@@ -267,7 +267,7 @@ export default function Sidebar() {
 
 
             {isAdmin && (
-              <Link href="/dashboard/stats" data-bs-toggle="tooltip" data-bs-trigger="hover" data-bs-placement="right" aria-label="Stats" title="Messaging Stats" className="nav-item">
+              <Link href="/dashboard/stats" prefetch={false} data-bs-toggle="tooltip" data-bs-trigger="hover" data-bs-placement="right" aria-label="Stats" title="Messaging Stats" className="nav-item">
                 <button
                   onClick={() => { setActiveSection('stats'); setOpenDropdown(null); }}
                   className={`${activeSection === 'stats' ? activeClass : inactiveClass}`}
@@ -278,7 +278,7 @@ export default function Sidebar() {
             )}
 
             {isAdmin && (
-              <Link href="/dashboard/assignments" data-bs-toggle="tooltip" data-bs-trigger="hover" data-bs-placement="right" aria-label="Assignments" title="Assignments" className="nav-item">
+              <Link href="/dashboard/assignments" prefetch={false} data-bs-toggle="tooltip" data-bs-trigger="hover" data-bs-placement="right" aria-label="Assignments" title="Assignments" className="nav-item">
                 <button
                   onClick={() => { setActiveSection('assignments'); setOpenDropdown(null); }}
                   className={`${activeSection === 'assignments' ? activeClass : inactiveClass}`}
@@ -293,7 +293,7 @@ export default function Sidebar() {
         <div className="flex-lg-column d-none d-lg-block">
           <ul className="nav side-menu-nav justify-content-center">
             <li className="nav-item" onClick={() => { setActiveSection('settings'); setOpenDropdown(null); }}>
-              <Link href="/dashboard/settings" data-bs-toggle="tooltip" data-bs-trigger="hover" data-bs-placement="right" aria-label="Settings" title="Settings" className="nav-link light-dark-mode">
+              <Link href="/dashboard/settings" prefetch={false} data-bs-toggle="tooltip" data-bs-trigger="hover" data-bs-placement="right" aria-label="Settings" title="Settings" className="nav-link light-dark-mode">
                 <i className="ri-settings-2-line" />
               </Link>
             </li>

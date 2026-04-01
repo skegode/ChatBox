@@ -1,17 +1,37 @@
 // Displays a single message in the conversation
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { Check, CheckCheck, FileText, Download } from "lucide-react";
 
+// Inject chat-image related styles once globally
+const CHAT_IMAGE_STYLE_ID = '__chat-image-styles';
+if (typeof document !== 'undefined' && !document.getElementById(CHAT_IMAGE_STYLE_ID)) {
+  const style = document.createElement('style');
+  style.id = CHAT_IMAGE_STYLE_ID;
+  style.textContent = [
+    '.chat-image{ max-width:260px; border-radius:8px; object-fit:cover; cursor:pointer; display:block }',
+    '.chat-image-skeleton{ width:260px; height:160px; background:#f3f4f6; border-radius:8px }',
+    '.lightbox-overlay{ position:fixed; inset:0; background:rgba(0,0,0,0.7); display:flex; align-items:center; justify-content:center; z-index:1050 }',
+    '.lightbox-content img{ max-width:90%; max-height:90%; border-radius:8px }',
+    '.image-actions{ display:flex; gap:8px; align-items:center }',
+  ].join('\n');
+  document.head.appendChild(style);
+}
+
 type Message = {
   id: string;
+  messageId?: string | null;
   body: string;
   timestamp: Date;
   status: "sent" | "delivered" | "read";
   direction: "incoming" | "outgoing";
   chatId: string;
   mediaPath?: string | null;
-  messageType?: string | null;
+  mediaUrl?: string | null;
+  mediaId?: string | null;
+  mediaFileName?: string | null;
+  fileName?: string | null;
+  messageType?: 'text' | 'image' | 'video' | 'audio' | 'pdf' | 'document' | null;
   senderName?: string | null;
 };
 
@@ -36,6 +56,12 @@ export default function MessageBubble({
   let quote: string | null = null;
   let mainBody = message.body ?? "";
 
+  // Some backends return placeholder text like "media" for attachment-only messages.
+  // Hide that placeholder so users only see the attachment card.
+  if (message.messageType !== 'text' && (message.mediaPath || message.mediaUrl || message.mediaId) && /^(media|file)$/i.test(mainBody.trim())) {
+    mainBody = "";
+  }
+
   if (quotedText && quotedText.length > 0) {
     quote = quotedText;
   } else {
@@ -59,12 +85,26 @@ export default function MessageBubble({
     if (!u) return null;
     try {
       const url = new URL(u, window.location.href);
-      const qp =
-        url.searchParams.get("path") ||
-        url.searchParams.get("file") ||
+      // If this is our image proxy URL it will include the original value
+      // as the `url` query parameter (or sometimes `path`/`file`). Prefer
+      // `url`, then `path`, then `file` when extracting the filename.
+      const original =
+        url.searchParams.get('url') ||
+        url.searchParams.get('path') ||
+        url.searchParams.get('file') ||
         undefined;
-      if (qp) return qp.split("/").pop() || qp;
-      return url.pathname.split("/").pop() || null;
+      const source = original || url.pathname;
+      // If source is itself a URL, parse it to get its pathname
+      try {
+        const inner = new URL(source, window.location.href);
+        const qp2 = inner.searchParams.get('path') || inner.searchParams.get('file');
+        if (qp2) return qp2.split('/').pop() || qp2;
+        return inner.pathname.split('/').pop() || null;
+      } catch {
+        // Not an absolute URL — treat as a path-like string
+        const parts = String(source).split('?')[0].split('/');
+        return parts.pop() || null;
+      }
     } catch {
       const parts = String(u).split("?")[0].split("/");
       return parts.pop() || null;
@@ -77,18 +117,35 @@ export default function MessageBubble({
     return idx >= 0 ? fileName.slice(idx + 1).toLowerCase() : "";
   };
 
+  const sanitizeDisplayFileName = (name?: string | null) => {
+    if (!name) return null;
+    const v = String(name).trim();
+    if (!v) return null;
+    if (/^(media|file|download|messages?)$/i.test(v)) return null;
+    return v;
+  };
+
   // Resolve a media path or filename to a usable URL for preview/download.
-  // - If the path looks like an absolute URL, return as-is.
-  // - Otherwise route through the Next.js image proxy at /api/image/proxy?url=...
-  const resolveMediaUrl = (raw?: string | null) => {
-    if (!raw) return '';
-    const trimmed = String(raw).trim();
-    // absolute or protocol-relative
-    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed) || trimmed.startsWith('//')) return trimmed;
-    // absolute path on backend (starts with /) -> proxy will resolve against backend host
-    if (trimmed.startsWith('/')) return `/api/image/proxy?url=${encodeURIComponent(trimmed)}`;
-    // otherwise assume it's a filename or relative path -> proxy will try /images/<name>
-    return `/api/image/proxy?url=${encodeURIComponent(trimmed)}`;
+  // Route all media through the Next.js image proxy at `/api/image/proxy?url=...`.
+  // This ensures the proxy can try backend candidate locations and forward
+  // cookies/authorization when necessary, avoiding direct browser fetches
+  // that may 404 for bare filenames or protected upstream URLs.
+  const resolveMediaUrl = (raw?: string | null, mediaId?: string | null, messageId?: string | null, contactId?: string | null) => {
+    const mid = mediaId ? String(mediaId).trim() : '';
+    const msgId = messageId ? String(messageId).trim() : '';
+    if (!raw && !mid && !msgId) return '';
+    const trimmed = raw ? String(raw).trim() : '';
+    // Allow data URIs and already-proxied URLs to pass through unchanged
+    if (trimmed.startsWith('data:')) return trimmed;
+    if (trimmed.startsWith('/api/image/proxy')) return trimmed;
+    // Always route other values through the image proxy which will attempt
+    // multiple upstream candidate locations (uploads, media, Messages/media, etc.)
+    const params = new URLSearchParams();
+    if (trimmed) params.set('url', trimmed);
+    if (mid) params.set('mediaId', mid);
+    if (msgId) params.set('messageId', msgId);
+    if (contactId) params.set('contactId', contactId);
+    return `/api/image/proxy?${params.toString()}`;
   };
 
   const [pdfObjectUrl, setPdfObjectUrl] = useState<string | null>(null);
@@ -99,11 +156,87 @@ export default function MessageBubble({
   const [menuOpen, setMenuOpen] = useState(false);
   const [imageLoading, setImageLoading] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [imageErrorReason, setImageErrorReason] = useState<string | null>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [imageCandidateIndex, setImageCandidateIndex] = useState(0);
+
+  const probeImageError = async (url: string) => {
+    try {
+      const res = await fetch(url, { credentials: 'include' });
+      if (res.ok) return;
+      const text = await res.text();
+      const lower = text.toLowerCase();
+
+      if (lower.includes('oauth') || lower.includes('code\\":190') || lower.includes('token invalid') || lower.includes('token expired')) {
+        setImageErrorReason('Attachment unavailable: backend WhatsApp token is invalid or expired.');
+        return;
+      }
+
+      if (res.status === 401) {
+        setImageErrorReason('Attachment unavailable: unauthorized on upstream media service.');
+        return;
+      }
+
+      if (res.status === 404) {
+        setImageErrorReason('Attachment not found on media server.');
+        return;
+      }
+
+      setImageErrorReason(`Attachment failed to load (${res.status}).`);
+    } catch {
+      setImageErrorReason('Attachment failed to load due to a network/proxy error.');
+    }
+  };
+
+  const buildImageCandidates = (raw?: string | null, mediaId?: string | null, messageId?: string | null) => {
+    const candidates: string[] = [];
+    const trimmed = raw ? String(raw).trim() : '';
+    const mid = mediaId ? String(mediaId).trim() : '';
+    const msgId = messageId ? String(messageId).trim() : '';
+
+    const add = (u?: string | null) => {
+      if (!u) return;
+      const s = String(u).trim();
+      if (!s) return;
+      if (!candidates.includes(s)) candidates.push(s);
+    };
+
+    add(resolveMediaUrl(trimmed, mid, msgId, message.chatId || null));
+
+    if (trimmed) {
+      const noLead = trimmed.replace(/^\/+/, '');
+      const base = noLead.split('/').filter(Boolean).pop() || noLead;
+      add(`/api/proxy/Messages/media?path=${encodeURIComponent(trimmed)}`);
+      add(`/api/proxy/Messages/media?path=${encodeURIComponent('/uploads/' + base)}`);
+      add(`/api/proxy/Messages/media?path=${encodeURIComponent('/media/' + base)}`);
+      add(`/api/proxy/Messages/media/${encodeURIComponent(noLead)}`);
+      add(`/api/proxy/Messages/media/${encodeURIComponent(base)}`);
+    }
+
+    if (mid) {
+      add(`/api/proxy/Messages/media/${encodeURIComponent(mid)}`);
+      add(`/api/proxy/Messages/media?mediaId=${encodeURIComponent(mid)}`);
+      add(`/api/proxy/Messages/media?id=${encodeURIComponent(mid)}`);
+    }
+
+    if (msgId) {
+      add(`/api/proxy/Messages/media?messageId=${encodeURIComponent(msgId)}`);
+      add(`/api/proxy/Messages/media?wamid=${encodeURIComponent(msgId)}`);
+      add(`/api/proxy/Messages/${encodeURIComponent(msgId)}/media`);
+    }
+
+    return candidates;
+  };
+
+  const imageCandidates = useMemo(
+    () => buildImageCandidates(message.mediaUrl || message.mediaPath, message.mediaId, message.messageId),
+    [message.mediaUrl, message.mediaPath, message.mediaId, message.messageId]
+  );
+  const activeImageSrc = imageCandidates[imageCandidateIndex] || '';
 
   useEffect(() => {
-    const mediaUrl = resolveMediaUrl(message.mediaPath);
-    const fileName = getFileNameFromUrl(mediaUrl);
+    const mediaUrl = resolveMediaUrl(message.mediaUrl || message.mediaPath, message.mediaId, message.messageId, message.chatId || null);
+    const fileName = sanitizeDisplayFileName(message.mediaFileName || message.fileName || getFileNameFromUrl(mediaUrl));
     const ext = getExt(fileName);
     let aborted = false;
 
@@ -136,18 +269,24 @@ export default function MessageBubble({
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [message.mediaPath, message.messageType]);
+  }, [message.mediaPath, message.mediaId, message.messageType]);
 
-  // initialize image loading state when media changes
+  // Reset image state when media source changes.
+  // NOTE: we no longer set imageLoading=true here; the <img> is always mounted
+  // so onLoad / onError will fire and update state.
   useEffect(() => {
-    if (message.mediaPath) {
-      setImageLoading(true);
+    if (message.messageType !== 'text' && (message.mediaPath || message.mediaUrl || message.mediaId)) {
       setImageError(false);
+      setImageLoading(true);
+      setImageErrorReason(null);
+      setImageCandidateIndex(0);
     } else {
       setImageLoading(false);
       setImageError(false);
+      setImageErrorReason(null);
+      setImageCandidateIndex(0);
     }
-  }, [message.mediaPath]);
+  }, [message.mediaPath, message.mediaUrl, message.mediaId, message.messageType]);
 
   const handleDownload = async (mediaUrl?: string | null) => {
     if (!mediaUrl) return;
@@ -173,56 +312,60 @@ export default function MessageBubble({
   };
 
   const renderMedia = () => {
-    if (!message.mediaPath) return null;
+    const declaredType = String(message.messageType || 'text').toLowerCase();
+    if (declaredType === 'text') return null;
+    if (!message.mediaPath && !message.mediaUrl && !message.mediaId) return null;
 
-    const declaredType = (message.messageType || "").toLowerCase();
-    const fileName = getFileNameFromUrl(message.mediaPath);
+    const mediaUrl = resolveMediaUrl(message.mediaUrl || message.mediaPath, message.mediaId, message.messageId, message.chatId || null);
+    const fileName = sanitizeDisplayFileName(message.mediaFileName || message.fileName || getFileNameFromUrl(mediaUrl));
     const ext = getExt(fileName);
-    let inferredType = declaredType;
-    if (!inferredType || inferredType === "media" || inferredType === "file") {
-      if (["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg"].includes(ext))
-        inferredType = "image";
-      else if (["mp4", "webm", "ogg", "mov", "mkv"].includes(ext))
-        inferredType = "video";
-      else if (["mp3", "wav", "m4a", "aac", "oga"].includes(ext))
-        inferredType = "audio";
-      else if (ext === "pdf") inferredType = "pdf";
-      else inferredType = "document";
-    }
 
-    const mediaUrl = message.mediaPath;
+    // Use resolved media URL so filenames, previews and proxying work for relative paths
+    // (resolveMediaUrl will route non-absolute paths through the image proxy).
+    // NOTE: `mediaUrl` is used below for <img>, <video>, <audio> sources and downloads.
+    // Previously this used `message.mediaPath` directly which could be a bare filename
+    // and would fail to load from the browser (404). Using the resolved URL fixes that.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    // (mediaUrl is intentionally shadowed above for type inference)
+    // const mediaUrl = resolveMediaUrl(message.mediaPath);
 
-    switch (inferredType) {
+    switch (declaredType) {
       case "image":
         return (
           <div className="card p-2 mb-2" style={{ border: 'none', background: 'transparent' }}>
-            <style>{`
-              .chat-image{ max-width:260px; border-radius:8px; object-fit:cover; cursor:pointer; display:block }
-              .chat-image-skeleton{ width:260px; height:160px; background:#f3f4f6; border-radius:8px }
-              .lightbox-overlay{ position:fixed; inset:0; background:rgba(0,0,0,0.7); display:flex; align-items:center; justify-content:center; z-index:1050 }
-              .lightbox-content img{ max-width:90%; max-height:90%; border-radius:8px }
-              .image-actions { display:flex; gap:8px; align-items:center }
-            `}</style>
-
             <div className="d-flex flex-wrap align-items-start attached-file" style={{ gap: 12 }}>
               <div className="flex-grow-1 overflow-hidden">
                 <div className="text-start">
-                  {!imageLoading && !imageError && (
+                  {/* Always mount <img> so onLoad / onError fire; hide via CSS while loading */}
+                  {!imageError && (
                     <img
-                      src={mediaUrl}
+                      src={activeImageSrc || mediaUrl}
                       alt={fileName || 'Image'}
                       className="chat-image"
+                      style={imageLoading ? { position: 'absolute', width: 0, height: 0, overflow: 'hidden', opacity: 0 } : undefined}
                       onClick={() => setLightboxOpen(true)}
-                      onLoad={() => { setImageLoading(false); setImageError(false); }}
-                      onError={() => { setImageLoading(false); setImageError(true); }}
+                      onLoad={() => { setImageLoading(false); setImageError(false); setImageErrorReason(null); }}
+                      onError={() => {
+                        const hasNext = imageCandidateIndex < imageCandidates.length - 1;
+                        if (hasNext) {
+                          setImageLoading(true);
+                          setImageCandidateIndex((prev) => prev + 1);
+                          return;
+                        }
+                        setImageLoading(false);
+                        setImageError(true);
+                        void probeImageError(activeImageSrc || mediaUrl);
+                      }}
                     />
                   )}
 
-                  {imageLoading && <div className="chat-image-skeleton" />}
+                  {imageLoading && !imageError && <div className="chat-image-skeleton" />}
 
                   {imageError && (
                     <div style={{ width: 260, height: 140, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff5f5', borderRadius: 8, color: '#9ca3af' }}>
-                      Image failed to load
+                      <span style={{ padding: '0 10px', textAlign: 'center', fontSize: 12 }}>
+                        {imageErrorReason || 'Image failed to load'}
+                      </span>
                     </div>
                   )}
 
@@ -246,9 +389,9 @@ export default function MessageBubble({
               {lightboxOpen && (
                 <div className="lightbox-overlay" onClick={() => setLightboxOpen(false)}>
                   <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
-                    <img src={mediaUrl} alt={fileName || 'Image'} />
+                    <img src={activeImageSrc || mediaUrl} alt={fileName || 'Image'} />
                     <div style={{ display: 'flex', justifyContent: 'center', marginTop: 10 }}>
-                      <button className="btn btn-sm btn-light me-2" onClick={() => handleDownload(mediaUrl)}>
+                      <button className="btn btn-sm btn-light me-2" onClick={() => handleDownload(activeImageSrc || mediaUrl)}>
                         <i className="ri-download-2-line" /> Download
                       </button>
                       <button className="btn btn-sm btn-secondary" onClick={() => setLightboxOpen(false)}>Close</button>

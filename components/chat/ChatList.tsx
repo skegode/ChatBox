@@ -1,12 +1,12 @@
 //components/chat/ChatList.tsx
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import { PlusCircle, RefreshCw } from "lucide-react";
 import ChatItem from "./ChatItem";
 // import { FixedSizeList as VirtualList } from 'react-window';
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import api from "@/lib/api";
 import chatAdapter from '@/lib/chatAdapter';
 import { useAuth } from "../providers/AuthProvider";
@@ -36,8 +36,12 @@ export default function ChatList() {
   const [isRefreshing, setIsRefreshing] = useState(false); // background refresh indicator
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState<string>("");
+  // Guard background preview calls to avoid request storms that freeze the UI.
+  const previewInFlightRef = useRef<Set<string>>(new Set());
+  const previewRetryAtRef = useRef<Record<string, number>>({});
   const router = useRouter();
-  const { user, checkPolicy } = useAuth();
+  const pathname = usePathname();
+  const { user, checkPolicy, isLoading } = useAuth();
 
 
   // Check if user has permission to view all chats or just assigned chats
@@ -65,37 +69,78 @@ export default function ChatList() {
             lastMessageTime: n.lastMessageTime ?? p?.lastMessageTime ?? undefined,
             lastMediaPath: n.lastMediaPath ?? (p as any)?.lastMediaPath ?? undefined,
             lastMessageType: n.lastMessageType ?? (p as any)?.lastMessageType ?? undefined,
+            lastMessageDirection: n.lastMessageDirection ?? p?.lastMessageDirection ?? undefined,
+            lastMessageStatus: n.lastMessageStatus ?? p?.lastMessageStatus ?? undefined,
           } as Conversation;
         });
       });
 
       // For chats that don't include a last message preview, fetch lightweight previews in background
       (async () => {
-        try {
-          const missingAll = (normalized as Conversation[]).filter(c => !(c.lastMessageText) && c.contactId).map(c => c.contactId);
-          const maxFetchPreviews = 200; // hard cap to avoid overloading backend
-          const toFetch = missingAll.slice(0, maxFetchPreviews);
+          try {
+          // Run background preview fetches on the client regardless of a local token
+          // so the sidebar can display last-message previews for chats even when
+          // the client hasn't stored a token locally (for example when auth is
+          // cookie-based or managed server-side).
+          if (typeof window === 'undefined') return; // server-side safety
+          const missingAll = (normalized as Conversation[])
+            .filter(c => !(c.lastMessageText) && c.contactId)
+            .map(c => c.contactId);
+          if (missingAll.length === 0) return;
+
+          const now = Date.now();
+          const retryDelayMs = 90_000;
+          const maxFetchPreviews = 10;
+          const toFetch = missingAll
+            .filter((contactId) => {
+              const key = normalizeContactId(contactId) || contactId;
+              if (previewInFlightRef.current.has(key)) return false;
+              const retryAt = previewRetryAtRef.current[key] ?? 0;
+              return now >= retryAt;
+            })
+            .slice(0, maxFetchPreviews);
           if (toFetch.length === 0) return;
 
-          const batchSize = 10;
-          const previewsCache: Record<string, { lastMessageText?: string | null; lastMessageTime?: string | Date | null; lastMediaPath?: string | null; lastMessageType?: string | null }> = {};
+          const batchSize = 5;
+          type PreviewEntry = { lastMessageText?: string | null; lastMessageTime?: string | Date | null; lastMediaPath?: string | null; lastMessageType?: string | null; lastMessageDirection?: 'incoming' | 'outgoing' | null; lastMessageStatus?: string | null };
+          const previewsCache: Record<string, PreviewEntry> = {};
 
           for (let i = 0; i < toFetch.length; i += batchSize) {
             const batchIds = toFetch.slice(i, i + batchSize);
+
+            batchIds.forEach((contactId) => {
+              const key = normalizeContactId(contactId) || contactId;
+              previewInFlightRef.current.add(key);
+              // Set default backoff for this attempt; successful responses will override.
+              previewRetryAtRef.current[key] = Date.now() + retryDelayMs;
+            });
+
             const results = await Promise.allSettled(batchIds.map(async (contactId) => {
               const tryFetch = async (idToUse: string) => {
                 try {
                   const r = await api.get(`/api/Messages/contact/${encodeURIComponent(idToUse)}`);
-                  return r.data;
+                  const d = r.data;
+                  // Some backends return an empty array or null for contacts with no messages
+                  if (!d || (Array.isArray(d) && d.length === 0)) return null;
+                  return d;
                 } catch (_) {
                   return null;
                 }
               };
 
+              // Try primary endpoint with raw ID, then with +, then query-param alternative
               let data = await tryFetch(contactId);
               if (!data) {
                 const withPlus = contactId.startsWith('+') ? contactId : `+${contactId}`;
                 data = await tryFetch(withPlus);
+              }
+              if (!data) {
+                // Fallback: query-param endpoint per backend contract
+                try {
+                  const r = await api.get(`/api/Messages?contactId=${encodeURIComponent(contactId)}`);
+                  const d = r.data;
+                  if (d && (!Array.isArray(d) || d.length > 0)) data = d;
+                } catch (_) { /* ignore */ }
               }
               const msgs = chatAdapter.normalizeMessages(data, contactId);
               return { contactId, msgs };
@@ -104,6 +149,7 @@ export default function ChatList() {
             for (const res of results) {
               if (res.status === 'fulfilled') {
                 const { contactId, msgs } = res.value as { contactId: string; msgs: any[] };
+                const key = normalizeContactId(contactId) || contactId;
                 if (msgs && msgs.length > 0) {
                   msgs.sort((a, b) => new Date((b as any).messageDateTime).getTime() - new Date((a as any).messageDateTime).getTime());
                   const last = msgs[0];
@@ -113,17 +159,29 @@ export default function ChatList() {
                     const isImage = mt.includes("image") || /(\.jpg|\.jpeg|\.png|\.gif|\.webp)$/i.test(String(last.mediaPath || ""));
                     previewText = isImage ? "[Image]" : "[Attachment]";
                   }
-                  const entry = {
+                  const entry: PreviewEntry = {
                     lastMessageText: previewText,
                     lastMessageTime: last.messageDateTime ?? null,
                     lastMediaPath: last.mediaPath ?? null,
                     lastMessageType: last.messageType ?? null,
+                    lastMessageDirection: last.isIncoming ? 'incoming' : 'outgoing',
+                    lastMessageStatus: null, // individual messages may not carry status
                   };
                   previewsCache[contactId] = entry;
                   previewsCache[normalizeContactId(contactId)] = entry;
+                  // Success: stop retrying this contact.
+                  previewRetryAtRef.current[key] = Number.MAX_SAFE_INTEGER;
+                } else {
+                  // Empty/failure: retry later with backoff.
+                  previewRetryAtRef.current[key] = Date.now() + retryDelayMs;
                 }
               }
             }
+
+            batchIds.forEach((contactId) => {
+              const key = normalizeContactId(contactId) || contactId;
+              previewInFlightRef.current.delete(key);
+            });
 
             if (Object.keys(previewsCache).length > 0) {
               setChats(prev => (prev || []).map(ch => {
@@ -136,6 +194,8 @@ export default function ChatList() {
                   lastMessageTime: ch.lastMessageTime ?? p.lastMessageTime ?? ch.lastMessageTime,
                   lastMediaPath: ch.lastMediaPath ?? p.lastMediaPath ?? ch.lastMediaPath,
                   lastMessageType: ch.lastMessageType ?? p.lastMessageType ?? ch.lastMessageType,
+                  lastMessageDirection: ch.lastMessageDirection ?? p.lastMessageDirection ?? ch.lastMessageDirection,
+                  lastMessageStatus: ch.lastMessageStatus ?? p.lastMessageStatus ?? ch.lastMessageStatus,
                 };
               }));
             }
@@ -144,7 +204,6 @@ export default function ChatList() {
           console.error('Background preview fetch failed', err);
         }
       })();
-      if (!Array.isArray(response.data) && showLoading) setChats([]);
     } catch (err: unknown) {
       console.error("Error fetching conversations:", err);
       if (showLoading) setChats([]);
@@ -187,7 +246,8 @@ export default function ChatList() {
       }
     };
 
-    fetchConversations();
+    // Wait for auth loading to finish so background message requests include token
+    if (!isLoading) fetchConversations();
     startPolling();
     document.addEventListener('visibilitychange', handleVisibility);
 
@@ -236,6 +296,7 @@ export default function ChatList() {
           <h4 className="mb-0 flex-grow-1">Chats</h4>
           <Link
             href="/dashboard/broadcast"
+            prefetch={false}
             className="btn btn-link text-decoration-none text-muted font-size-18 py-0 me-2"
           >
             <i className="ri-broadcast-line"></i>
@@ -279,6 +340,7 @@ export default function ChatList() {
           <h4 className="mb-0 flex-grow-1">Chats</h4>
           <Link
             href="/dashboard/broadcast"
+            prefetch={false}
             className="btn btn-link text-decoration-none text-muted font-size-18 py-0 me-2"
           >
             <i className="ri-broadcast-line"></i>
@@ -325,6 +387,7 @@ export default function ChatList() {
           <h4 className="mb-0 flex-grow-1">Chats</h4>
           <Link
             href="/dashboard/broadcast"
+            prefetch={false}
             className="btn btn-link text-decoration-none text-muted font-size-18 py-0 me-2"
           >
             <i className="ri-broadcast-line"></i>
@@ -376,6 +439,7 @@ export default function ChatList() {
           <h4 className="mb-0 flex-grow-1">Chats</h4>
           <Link
             href="/dashboard/broadcast"
+            prefetch={false}
             className="btn btn-link text-decoration-none text-muted font-size-18 py-0 me-2"
           >
             <i className="ri-broadcast-line"></i>
@@ -417,9 +481,14 @@ export default function ChatList() {
                 )
                 .map((chat, idx) => {
                   const keyId = normalizeContactId(chat.contactId) || `${idx}`;
+                  const chatHref = `/dashboard/${encodeURIComponent(chat.contactId)}`;
+                  // Highlight the chat that matches the current URL
+                  const isActive = pathname === chatHref ||
+                    pathname === `/dashboard/${chat.contactId}` ||
+                    normalizeContactId(decodeURIComponent(pathname?.split('/dashboard/')[1] || '')) === normalizeContactId(chat.contactId);
                   return (
-                    <li key={keyId + '-' + idx} className="w-100">
-                      <Link href={`/dashboard/${encodeURIComponent(chat.contactId)}`}>
+                    <li key={keyId + '-' + idx} className={`w-100${isActive ? ' active' : ''}`}>
+                      <Link prefetch={false} href={chatHref}>
                         <div style={{ width: '100%' }}>
                           <ChatItem chat={chat} />
                         </div>

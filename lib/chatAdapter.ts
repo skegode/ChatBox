@@ -2,6 +2,8 @@
 
 type Raw = Record<string, unknown>;
 
+export type ChatMessageType = 'text' | 'image' | 'video' | 'audio' | 'pdf' | 'document';
+
 export type ConversationView = {
   contactId: string;
   contactName?: string | null;
@@ -10,6 +12,7 @@ export type ConversationView = {
   unreadCount?: number;
   messageCount?: number;
   lastMessageDirection?: 'incoming' | 'outgoing' | null;
+  isLastMessageIncoming?: boolean | null;
   lastMessageStatus?: string | null;
   contactAvatarUrl?: string | null;
 };
@@ -23,6 +26,22 @@ function firstString(obj: Raw, keys: string[]) {
   return undefined;
 }
 
+function sanitizeMediaId(v?: string | null): string | null {
+  if (!v) return null;
+  const s = String(v).trim();
+  if (!s) return null;
+  if (/^(0|null|undefined|none|n\/a)$/i.test(s)) return null;
+  return s;
+}
+
+function normalizeMessageType(raw: string | undefined): ChatMessageType {
+  const s = String(raw ?? '').trim().toLowerCase();
+  if (s === 'image' || s === 'video' || s === 'audio' || s === 'pdf' || s === 'document') {
+    return s;
+  }
+  return 'text';
+}
+
 export function normalizeConversations(input: unknown): ConversationView[] {
   const arr: Raw[] = Array.isArray(input) ? input as Raw[] : (input && typeof input === 'object' && 'items' in (input as any) && Array.isArray((input as any).items) ? (input as any).items : []);
   return arr.map((c) => {
@@ -33,6 +52,7 @@ export function normalizeConversations(input: unknown): ConversationView[] {
     const unreadCount = typeof c['unreadCount'] === 'number' ? (c['unreadCount'] as number) : (typeof c['unread'] === 'number' ? (c['unread'] as number) : 0);
     const messageCount = typeof c['messageCount'] === 'number' ? (c['messageCount'] as number) : (typeof c['messagesCount'] === 'number' ? (c['messagesCount'] as number) : 0);
     const lastMessageDirection = typeof c['lastMessageDirection'] === 'string' ? (c['lastMessageDirection'] as 'incoming'|'outgoing') : undefined;
+    const isLastMessageIncoming = lastMessageDirection === 'incoming' ? true : lastMessageDirection === 'outgoing' ? false : null;
     const lastMessageStatus = firstString(c, ['lastMessageStatus', 'status']) ?? null;
     const contactAvatarUrl = firstString(c, ['contactAvatarUrl', 'avatarUrl', 'avatar']) ?? null;
 
@@ -44,6 +64,7 @@ export function normalizeConversations(input: unknown): ConversationView[] {
       unreadCount,
       messageCount,
       lastMessageDirection,
+      isLastMessageIncoming,
       lastMessageStatus,
       contactAvatarUrl,
     };
@@ -54,10 +75,14 @@ export function normalizeConversations(input: unknown): ConversationView[] {
 export type MessageVm = {
   id: number | string;
   messageId?: string | null;
+  messageType: ChatMessageType;
+  mediaId?: string | null;
+  mediaFileName?: string | null;
+  fileName?: string | null;
+  mediaUrl?: string | null;
   contactName?: string | null;
   contactWaId: string;
   messageText?: string | null;
-  messageType?: string | null;
   mediaPath?: string | null;
   messageDateTime: string | Date;
   isIncoming: boolean;
@@ -71,20 +96,18 @@ export function normalizeMessages(input: unknown, contactIdFallback?: string): M
   return arr.map((m) => {
     const id = m['id'] ?? m['messageId'] ?? m['msgId'] ?? m['message_id'] ?? 0;
     const messageId = typeof m['messageId'] === 'string' ? (m['messageId'] as string) : typeof m['message_id'] === 'string' ? (m['message_id'] as string) : (typeof m['msgId'] === 'string' ? (m['msgId'] as string) : (typeof id === 'string' ? id : undefined));
+    const messageType = normalizeMessageType(firstString(m, ['messageType', 'type', 'mediaType']));
+    const isAttachment = messageType !== 'text';
+    const mediaId = isAttachment ? sanitizeMediaId(firstString(m, ['mediaId', 'MediaId', 'whatsAppMediaId', 'imageId', 'attachmentId']) ?? null) : null;
+    const mediaFileName = isAttachment ? (firstString(m, ['mediaFileName', 'MediaFileName']) ?? null) : null;
+    const fileName = isAttachment ? (firstString(m, ['fileName', 'FileName', 'originalFileName']) ?? null) : null;
+    const mediaUrl = isAttachment ? (firstString(m, ['mediaUrl', 'MediaUrl', 'downloadUrl', 'fileUrl']) ?? null) : null;
     const contactWaId = firstString(m, ['contactWaId', 'contactId', 'phoneNumber', 'phone', 'to', 'recipient']) ?? (contactIdFallback ?? '');
     const contactName = firstString(m, ['contactName', 'name', 'senderName', 'displayName']) ?? null;
     const messageText = firstString(m, ['messageText', 'text', 'body', 'message']) ?? null;
-    const messageType = firstString(m, ['messageType', 'type', 'mediaType']) ?? null;
-    let mediaPath = firstString(m, ['mediaPath', 'mediaUrl', 'media', 'filePath']) ?? null;
-    // If backend sometimes returns bare filenames (e.g. "12345.jpg"), normalize to a public uploads path
-    if (mediaPath && typeof mediaPath === 'string') {
-      const looksLikeUrl = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(mediaPath) || mediaPath.startsWith('//');
-      const looksLikeAbsolute = mediaPath.startsWith('/');
-      const hasExt = /\.[a-zA-Z0-9]{2,6}$/.test(mediaPath);
-      if (!looksLikeUrl && !looksLikeAbsolute && hasExt) {
-        mediaPath = `/uploads/${mediaPath}`;
-      }
-    }
+    const mediaPath = isAttachment
+      ? (firstString(m, ['mediaPath', 'MediaPath', 'media', 'filePath', 'MediaLocalPath', 'mediaLocalPath']) ?? null)
+      : null;
     const msgTimeRaw = firstString(m, ['messageDateTime', 'timestamp', 'createdAt', 'time']) ?? new Date().toISOString();
     const messageDateTime = typeof msgTimeRaw === 'string' ? new Date(msgTimeRaw) : new Date();
     const isIncoming = (typeof m['isIncoming'] === 'boolean' ? m['isIncoming'] as boolean : (m['direction'] === 'incoming' || (m['from'] && String(m['from']).toLowerCase() !== 'me'))) as boolean;
@@ -95,10 +118,14 @@ export function normalizeMessages(input: unknown, contactIdFallback?: string): M
     return {
       id: id as any,
       messageId: messageId ?? null,
+      messageType,
+      mediaId,
+      mediaFileName,
+      fileName,
+      mediaUrl,
       contactName,
       contactWaId,
       messageText,
-      messageType,
       mediaPath,
       messageDateTime,
       isIncoming,

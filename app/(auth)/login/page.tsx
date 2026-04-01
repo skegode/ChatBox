@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import ErrorMessage from '../../../components/ui/ErrorMessage';
 import { useAuth } from '../../../components/providers/AuthProvider';
@@ -15,7 +15,10 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { login } = useAuth();
+
+  const sessionExpired = searchParams?.get('reason') === 'inactivity';
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,6 +79,11 @@ export default function LoginPage() {
             <div className="card">
               <div className="card-body p-4">
                 <div className="p-3">
+                  {sessionExpired && (
+                    <div style={{ background: '#fff3cd', border: '1px solid #ffc107', borderRadius: 8, padding: '10px 14px', marginBottom: 16, color: '#856404', fontSize: 14 }}>
+                      You were logged out due to inactivity. Please sign in again.
+                    </div>
+                  )}
                   {error && <ErrorMessage message={error} />}
                   <form onSubmit={handleLogin}>
                     <div className="mb-3">

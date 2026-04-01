@@ -117,7 +117,7 @@ export default function MessageInput({ onSend }: MessageInputProps) {
                   ref={fileInputRef}
                   onChange={handleFileChange}
                   className="d-none"
-                  accept="image/*,video/*,audio/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.doc,.docx"
+                  accept="*/*"
                 />
               </li>
               <li className="list-inline-item">

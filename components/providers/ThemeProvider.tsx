@@ -27,13 +27,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setMounted(true);
   }, []);
 
-  // Apply theme by toggling the dark-theme.css link
+  // Apply theme via data-theme attribute (wa-theme.css reads this)
   useEffect(() => {
     if (!mounted) return;
-    const link = document.getElementById('dark-theme-style') as HTMLLinkElement | null;
-    if (link) {
-      link.disabled = theme === 'light';
-    }
     document.body.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
   }, [theme, mounted]);

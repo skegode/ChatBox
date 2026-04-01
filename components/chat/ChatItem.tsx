@@ -85,8 +85,10 @@ function ChatItemInner({ chat }: { chat: Conversation }) {
      chat?.lastMessageIsIncoming === undefined &&
      unread === 0);
 
-  // Get message status (default to 'delivered' for outgoing messages without explicit status)
-  const lastMessageStatus = chat?.lastMessageStatus ?? 'delivered';
+  // Get message status. If missing and the last message was outgoing,
+  // treat it as 'sent' (single tick) until the backend reports delivery.
+  let lastMessageStatus = (chat?.lastMessageStatus ?? undefined) as string | undefined;
+  if (!lastMessageStatus && isLastMessageOutgoing) lastMessageStatus = 'sent';
 
   // Type guard to check for avatar fields
   const hasContactAvatarUrl = (c: Conversation): c is ConversationWithAvatar =>
@@ -112,12 +114,13 @@ function ChatItemInner({ chat }: { chat: Conversation }) {
         <h5 className="text-truncate font-size-15 mb-1">{name}</h5>
         <p className="chat-user-message text-truncate mb-0 d-flex align-items-center">
           {isLastMessageOutgoing && (
-            <span className="me-1 d-inline-flex align-items-center">
-              {lastMessageStatus === 'read' ? (
+            <span className="me-1 d-inline-flex align-items-center" aria-hidden>
+              {(lastMessageStatus === 'read' || String(lastMessageStatus).toLowerCase() === 'seen') ? (
                 <CheckCheck size={14} style={{ color: '#3b82f6' }} />
-              ) : lastMessageStatus === 'delivered' ? (
+              ) : (String(lastMessageStatus).toLowerCase() === 'delivered') ? (
                 <CheckCheck size={14} style={{ color: '#9ca3af' }} />
               ) : (
+                // default and 'sent' show a single grey tick
                 <Check size={14} style={{ color: '#9ca3af' }} />
               )}
             </span>
@@ -166,7 +169,9 @@ function areEqual(prev: { chat: Conversation }, next: { chat: Conversation }) {
     a.lastMessageText === b.lastMessageText &&
     (a as any).lastMediaPath === (b as any).lastMediaPath &&
     a.lastMessageTime === b.lastMessageTime &&
-    (a.unreadCount ?? 0) === (b.unreadCount ?? 0)
+    (a.unreadCount ?? 0) === (b.unreadCount ?? 0) &&
+    a.lastMessageDirection === b.lastMessageDirection &&
+    a.lastMessageStatus === b.lastMessageStatus
   );
 }
 

@@ -43,15 +43,59 @@ interface UserInfo {
 interface ConvoAgentInfo {
   lastRepliedBy?: number | null;
   lastRepliedByName?: string | null;
+  lastRepliedAt?: string | null;
+}
+
+function getContactKey(contactId?: string | null): string {
+  return normalizeContactId(contactId || '').trim();
+}
+
+function getSenderId(message: MessageDetail | Record<string, unknown>): number | null {
+  const m = message as Record<string, unknown>;
+  const candidates = [m.sentBy, m.senderId, m.userId, m.agentId, m.repliedBy, m.repliedById];
+  for (const c of candidates) {
+    if (typeof c === 'number' && Number.isFinite(c)) return c;
+    if (typeof c === 'string' && c.trim().length > 0 && !Number.isNaN(Number(c))) return Number(c);
+  }
+  return null;
+}
+
+function getSenderName(message: MessageDetail | Record<string, unknown>): string | null {
+  const m = message as Record<string, unknown>;
+  const candidates = [m.senderName, m.sentByName, m.repliedByName, m.agentName, m.userName];
+  for (const c of candidates) {
+    if (typeof c === 'string' && c.trim().length > 0) return c.trim();
+  }
+  return null;
+}
+
+function isIncomingMessage(message: MessageDetail | Record<string, unknown>): boolean | null {
+  const m = message as Record<string, unknown>;
+
+  if (typeof m.isIncoming === 'boolean') return m.isIncoming;
+
+  const direction = typeof m.direction === 'string' ? m.direction.toLowerCase() : '';
+  if (direction === 'incoming') return true;
+  if (direction === 'outgoing') return false;
+
+  if (typeof m.fromMe === 'boolean') return !m.fromMe;
+  if (typeof m.isFromMe === 'boolean') return !m.isFromMe;
+
+  const from = typeof m.from === 'string' ? m.from.toLowerCase() : '';
+  if (from === 'me' || from === 'agent' || from === 'system') return false;
+
+  return null;
 }
 
 const StatsDashboard = () => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [usersMap, setUsersMap] = useState<Record<number, string>>({});
   const [convoAgentMap, setConvoAgentMap] = useState<Record<string, ConvoAgentInfo>>({});
+  const [convoDirectionMap, setConvoDirectionMap] = useState<Record<string, 'Sent' | 'Received'>>({});
   const [agentReplyData, setAgentReplyData] = useState<AgentActivity[]>([]);
   const [agentLoading, setAgentLoading] = useState(true);
   const usersMapRef = useRef<Record<number, string>>({});
@@ -70,6 +114,10 @@ const StatsDashboard = () => {
       const rawConvos = Array.isArray(chatsRes.data) ? chatsRes.data : [];
       const convos = chatAdapter.normalizeConversations(rawConvos) as Conversation[];
       setConversations(convos);
+      const convosByKey: Record<string, Conversation> = {};
+      convos.forEach((c) => {
+        convosByKey[getContactKey(c.contactId)] = c;
+      });
 
       const users: UserInfo[] = Array.isArray(usersRes.data) ? usersRes.data : [];
       const map: Record<number, string> = {};
@@ -82,9 +130,12 @@ const StatsDashboard = () => {
 
       // Mark UI as ready with conversation summaries while we fetch per-conversation details in background
       if (!signal?.aborted) setLoading(false);
+      if (!signal?.aborted) setLastUpdated(new Date());
 
       const agentInfo: Record<string, ConvoAgentInfo> = {};
+      const directionInfo: Record<string, 'Sent' | 'Received'> = {};
       const agentReplyCounter: Record<number, { name: string; lastReply: string; count: number }> = {};
+      const countsMap: Record<string, { messageCount: number; unreadCount: number; lastTime?: string | null }> = {};
 
       // Reduce concurrent calls to avoid overloading backend; fetch in small batches and update UI incrementally
       const batchSize = 3;
@@ -126,46 +177,112 @@ const StatsDashboard = () => {
           )
         );
         for (const { contactId, messages } of results) {
+          const contactKey = getContactKey(contactId);
+          const summaryConvo = convosByKey[contactKey];
           // Ensure conversation preview shows a sensible last message
           if (messages && messages.length > 0) {
             // sort messages by date desc
             const msgsSorted = messages.slice().sort((a, b) => new Date((b as any).messageDateTime).getTime() - new Date((a as any).messageDateTime).getTime());
             const lastMsg = msgsSorted[0];
-            // derive preview text: prefer text fields if available, otherwise media indicator
-            let previewText = (lastMsg as any).messageText ?? (lastMsg as any).text ?? null;
+            const lastMsgIncoming = isIncomingMessage(lastMsg as any);
+            // Direction is determined from the actual latest message in this conversation.
+            // If uncertain, treat as Received unless there is explicit outgoing/system evidence.
+            directionInfo[contactKey] = lastMsgIncoming === false ? 'Sent' : 'Received';
+            // store counts for stat cards/table using fetched messages
+            const unreadGuess = msgsSorted.filter((m: any) => {
+              const status = (m.status || m.messageStatus || '').toString().toLowerCase();
+              return m.isIncoming === true && status === 'unread';
+            }).length;
+            // Keep summary endpoint values authoritative for counts when available.
+            countsMap[contactKey] = {
+              messageCount: typeof summaryConvo?.messageCount === 'number' ? summaryConvo.messageCount : msgsSorted.length,
+              unreadCount: typeof summaryConvo?.unreadCount === 'number' ? summaryConvo.unreadCount : unreadGuess,
+              lastTime: (lastMsg as any).messageDateTime ?? null,
+            };
+            // derive preview text: check multiple possible text fields, otherwise media indicator
+            const textCandidates = [
+              (lastMsg as any).messageText,
+              (lastMsg as any).text,
+              (lastMsg as any).body,
+              (lastMsg as any).bodyText,
+              (lastMsg as any).messageBody,
+              (lastMsg as any).content,
+              (lastMsg as any).caption,
+              (lastMsg as any).textBody,
+            ];
+            let previewText = null as string | null;
+            for (const t of textCandidates) {
+              if (typeof t === 'string' && t.trim().length > 0) { previewText = t; break; }
+            }
             if (!previewText) {
-              const mp = (lastMsg as any).mediaPath ?? (lastMsg as any).mediaUrl ?? '';
-              const mt = ((lastMsg as any).messageType || '').toString().toLowerCase();
+              const mp = (lastMsg as any).mediaPath ?? (lastMsg as any).mediaUrl ?? (lastMsg as any).media ?? '';
+              const mt = ((lastMsg as any).messageType || (lastMsg as any).messageTypeName || '').toString().toLowerCase();
               if (mp || mt.includes('image')) previewText = '[Image]';
               else if (mt.includes('video')) previewText = '[Video]';
               else if (mt.includes('audio')) previewText = '[Audio]';
-              else if (mt.includes('pdf')) previewText = '[Document]';
+              else if (mt.includes('pdf') || mt.includes('document')) previewText = '[Document]';
               else previewText = null;
             }
             const lastTime = (lastMsg as any).messageDateTime ?? null;
             if (previewText || lastTime) {
               // update conversations state so the table shows the preview immediately
-              setConversations(prev => prev.map(cc => cc.contactId === contactId ? { ...cc, lastMessageText: previewText ?? cc.lastMessageText, lastMessageTime: lastTime ?? cc.lastMessageTime } : cc));
+              setConversations(prev => prev.map(cc => {
+                const a = getContactKey(cc.contactId || '');
+                const b = contactKey;
+                if (a === b) {
+                  // derive a reliable isLastMessageIncoming flag from message properties
+                  const lm = lastMsg as any;
+                  const derivedIncoming = isIncomingMessage(lm);
+
+                  const newLastMessageText = previewText ?? cc.lastMessageText;
+                  const newLastMessageTime = lastTime ?? cc.lastMessageTime;
+                  const newIsLastMessageIncoming = derivedIncoming ?? (cc.isLastMessageIncoming ?? null);
+
+                  const textChanged = (cc.lastMessageText || '') !== (newLastMessageText || '');
+                  const timeChanged = String(cc.lastMessageTime || '') !== String(newLastMessageTime || '');
+                  const dirChanged = (cc.isLastMessageIncoming ?? null) !== newIsLastMessageIncoming;
+                  const counts = countsMap[a];
+                  const messageCount = counts?.messageCount ?? cc.messageCount;
+                  const unreadCount = counts?.unreadCount ?? cc.unreadCount;
+
+                  if (textChanged || timeChanged || dirChanged || counts) {
+                    return {
+                      ...cc,
+                      lastMessageText: newLastMessageText,
+                      lastMessageTime: newLastMessageTime,
+                      isLastMessageIncoming: newIsLastMessageIncoming,
+                      messageCount,
+                      unreadCount,
+                    };
+                  }
+                  // No meaningful change — return previous object to avoid re-render
+                  return cc;
+                }
+                return cc;
+              }));
             }
           }
           const outgoing = messages
-            .filter((m: MessageDetail) => !m.isIncoming && m.sentBy)
+            .filter((m: MessageDetail) => !m.isIncoming && getSenderId(m) !== null)
             .sort((a: MessageDetail, b: MessageDetail) => new Date(b.messageDateTime).getTime() - new Date(a.messageDateTime).getTime());
           if (outgoing.length > 0) {
             const last = outgoing[0];
-            agentInfo[contactId] = {
-              lastRepliedBy: last.sentBy,
-              lastRepliedByName: last.senderName || (last.sentBy ? map[last.sentBy] : null) || null,
+            const senderId = getSenderId(last);
+            const senderName = getSenderName(last);
+            agentInfo[contactKey] = {
+              lastRepliedBy: senderId,
+              lastRepliedByName: senderName || (senderId ? map[senderId] : null) || null,
+              lastRepliedAt: last.messageDateTime ?? null,
             };
-            if (last.sentBy) {
-              const agentName = last.senderName || map[last.sentBy] || `Agent #${last.sentBy}`;
-              if (!agentReplyCounter[last.sentBy]) {
-                agentReplyCounter[last.sentBy] = { name: agentName, lastReply: last.messageDateTime, count: 0 };
+            if (senderId) {
+              const agentName = senderName || map[senderId] || `Agent #${senderId}`;
+              if (!agentReplyCounter[senderId]) {
+                agentReplyCounter[senderId] = { name: agentName, lastReply: last.messageDateTime, count: 0 };
               }
-              const agentOutgoing = messages.filter((m: MessageDetail) => !m.isIncoming && m.sentBy === last.sentBy);
-              agentReplyCounter[last.sentBy].count += agentOutgoing.length;
-              if (new Date(last.messageDateTime) > new Date(agentReplyCounter[last.sentBy].lastReply)) {
-                agentReplyCounter[last.sentBy].lastReply = last.messageDateTime;
+              const agentOutgoing = messages.filter((m: MessageDetail) => !m.isIncoming && getSenderId(m) === senderId);
+              agentReplyCounter[senderId].count += agentOutgoing.length;
+              if (new Date(last.messageDateTime) > new Date(agentReplyCounter[senderId].lastReply)) {
+                agentReplyCounter[senderId].lastReply = last.messageDateTime;
               }
             }
           }
@@ -174,10 +291,24 @@ const StatsDashboard = () => {
         // Merge partial results into UI so users see activity gradually
         if (!signal?.aborted) {
           setConvoAgentMap(prev => ({ ...prev, ...agentInfo }));
+          setConvoDirectionMap(prev => ({ ...prev, ...directionInfo }));
           const activityList: AgentActivity[] = Object.entries(agentReplyCounter)
             .map(([id, data]) => ({ agentId: Number(id), agentName: data.name, lastReply: data.lastReply, replyCount: data.count }))
             .sort((a, b) => new Date(b.lastReply).getTime() - new Date(a.lastReply).getTime());
           setAgentReplyData(activityList);
+          if (Object.keys(countsMap).length > 0) {
+            setConversations(prev => (prev || []).map(cc => {
+              const key = normalizeContactId(cc.contactId || '');
+              const counts = countsMap[key];
+              if (!counts) return cc;
+              return {
+                ...cc,
+                messageCount: counts.messageCount ?? cc.messageCount,
+                unreadCount: counts.unreadCount ?? cc.unreadCount,
+                lastMessageTime: counts.lastTime ?? cc.lastMessageTime,
+              };
+            }));
+          }
         }
       }
       setAgentLoading(false);
@@ -197,7 +328,24 @@ const StatsDashboard = () => {
       if (signal?.aborted) return;
       const rawConvos = Array.isArray(res.data) ? res.data : [];
       const convos = chatAdapter.normalizeConversations(rawConvos) as Conversation[];
-      setConversations(convos);
+      // Merge with existing conversations to avoid wiping background-fetched previews
+      setConversations(prev => {
+        const prevArr = prev || [];
+        return convos.map(n => {
+          const p = prevArr.find(x => normalizeContactId(x.contactId) === normalizeContactId(n.contactId));
+          return {
+            ...n,
+            lastMessageText: n.lastMessageText ?? p?.lastMessageText ?? undefined,
+            lastMessageTime: n.lastMessageTime ?? p?.lastMessageTime ?? undefined,
+            // preserve other lightweight preview fields if available
+            // @ts-ignore - preserve any additional media/preview info
+            lastMediaPath: (n as any).lastMediaPath ?? (p as any)?.lastMediaPath ?? undefined,
+            // @ts-ignore
+            lastMessageType: (n as any).lastMessageType ?? (p as any)?.lastMessageType ?? undefined,
+          } as Conversation;
+        });
+      });
+      if (!signal?.aborted) setLastUpdated(new Date());
     } catch {
       // Silently ignore — cards keep showing last good data
     }
@@ -244,6 +392,42 @@ const StatsDashboard = () => {
       return true;
     });
   }, [conversations, startDate, endDate]);
+
+  // Ensure a stable human-readable direction label for rendering.
+  // Always return either Sent or Received.
+  const conversationsWithDirection = useMemo(() => {
+    return filteredConversations.map(c => {
+      const key = getContactKey(c.contactId);
+      if (convoDirectionMap[key]) {
+        return { ...c, directionLabel: convoDirectionMap[key] } as typeof c & { directionLabel: 'Sent' | 'Received' };
+      }
+
+      // Decide the most recent direction:
+      // - explicit lastMessageDirection wins
+      // - else isLastMessageIncoming true => Received, false => Sent
+      // - else if we can prove latest reply came from agent/system, Sent
+      // - else default Received (no clear agent reply)
+      let label: 'Sent' | 'Received' = 'Received';
+
+      const dirField = ((c as any).lastMessageDirection || '').toString().toLowerCase();
+      if (dirField === 'incoming') {
+        label = 'Received';
+      } else if (dirField === 'outgoing') {
+        label = 'Sent';
+      } else if (c.isLastMessageIncoming === true) {
+        label = 'Received';
+      } else if (c.isLastMessageIncoming === false) {
+        label = 'Sent';
+      } else {
+        const reply = convoAgentMap[key];
+        const lastMessageTs = c.lastMessageTime ? new Date(c.lastMessageTime).getTime() : 0;
+        const lastReplyTs = reply?.lastRepliedAt ? new Date(reply.lastRepliedAt).getTime() : 0;
+        label = reply?.lastRepliedBy && lastReplyTs >= lastMessageTs ? 'Sent' : 'Received';
+      }
+
+      return { ...c, directionLabel: label } as typeof c & { directionLabel: 'Sent' | 'Received' };
+    });
+  }, [filteredConversations, convoAgentMap, convoDirectionMap]);
 
   // All stats derived from filtered conversations
   const totalConversations = filteredConversations.length;
@@ -340,8 +524,11 @@ const StatsDashboard = () => {
           text-transform: uppercase;
           letter-spacing: 0.8px;
           padding: 14px 16px;
-          white-space: nowrap;
+          white-space: normal;
+          line-height: 1.3;
+          word-break: break-word;
           transition: background 0.3s ease, color 0.3s ease;
+          vertical-align: top;
         }
         .data-table thead th:first-child { border-radius: 10px 0 0 0; }
         .data-table thead th:last-child { border-radius: 0 10px 0 0; }
@@ -352,8 +539,30 @@ const StatsDashboard = () => {
           padding: 12px 16px;
           font-size: 0.875rem;
           vertical-align: middle;
+          white-space: normal;
+          word-break: break-word;
           transition: color 0.3s ease, border-color 0.3s ease;
         }
+
+        .conversation-table {
+          table-layout: fixed;
+          min-width: 1240px;
+        }
+
+        .conversation-table th:nth-child(1),
+        .conversation-table td:nth-child(1) { width: 180px; }
+        .conversation-table th:nth-child(2),
+        .conversation-table td:nth-child(2) { width: 280px; }
+        .conversation-table th:nth-child(3),
+        .conversation-table td:nth-child(3) { width: 180px; }
+        .conversation-table th:nth-child(4),
+        .conversation-table td:nth-child(4) { width: 90px; }
+        .conversation-table th:nth-child(5),
+        .conversation-table td:nth-child(5) { width: 90px; }
+        .conversation-table th:nth-child(6),
+        .conversation-table td:nth-child(6) { width: 130px; }
+        .conversation-table th:nth-child(7),
+        .conversation-table td:nth-child(7) { width: 300px; }
         .badge-pill {
           display: inline-flex;
           align-items: center;
@@ -567,6 +776,108 @@ const StatsDashboard = () => {
         body[data-theme="light"] .stats-avatar { background: linear-gradient(135deg, #2563eb, #60a5fa); }
         body[data-theme="light"] .stats-dash { color: #cbd5e1; }
         body[data-theme="light"] .accent-icon { color: #1e40af; }
+
+        /* WhatsApp palette overrides */
+        .stats-root {
+          background: var(--wa-bg);
+          color: var(--wa-ink-900);
+        }
+
+        .stats-header {
+          background: color-mix(in srgb, var(--wa-green-600) 10%, var(--wa-surface));
+          border-bottom: 1px solid var(--wa-border);
+        }
+
+        .stat-card {
+          border: 1px solid var(--wa-border);
+        }
+
+        .stat-card-1,
+        .stat-card-2,
+        .stat-card-3,
+        .stat-card-4,
+        .stat-card-5,
+        .stat-card-6 {
+          background: color-mix(in srgb, var(--wa-green-600) 8%, var(--wa-surface));
+        }
+
+        .stat-card .stat-icon {
+          background: color-mix(in srgb, var(--wa-green-600) 14%, var(--wa-surface));
+          border: 1px solid color-mix(in srgb, var(--wa-green-600) 34%, var(--wa-border));
+        }
+
+        .stat-card .stat-icon i,
+        .section-title,
+        .agent-name,
+        .accent-icon {
+          color: var(--wa-green-700) !important;
+        }
+
+        .stat-card .stat-number,
+        .stats-title,
+        .stats-contact-name {
+          color: var(--wa-ink-900) !important;
+        }
+
+        .stat-card .stat-label,
+        .stats-subtitle,
+        .stats-meta {
+          color: var(--wa-ink-500) !important;
+        }
+
+        .glass-panel,
+        .filter-bar {
+          background: var(--wa-surface);
+          border: 1px solid var(--wa-border);
+        }
+
+        .data-table thead th {
+          background: color-mix(in srgb, var(--wa-green-600) 9%, var(--wa-surface));
+          color: var(--wa-ink-700);
+          border-bottom: 1px solid var(--wa-border);
+        }
+
+        .data-table tbody tr:hover {
+          background: color-mix(in srgb, var(--wa-green-600) 6%, var(--wa-surface));
+        }
+
+        .data-table tbody td {
+          border-bottom: 1px solid var(--wa-border);
+          color: var(--wa-ink-900);
+        }
+
+        .badge-blue,
+        .badge-cyan {
+          background: color-mix(in srgb, var(--wa-green-600) 18%, var(--wa-surface));
+          color: var(--wa-green-700);
+        }
+
+        .badge-green {
+          background: color-mix(in srgb, #25d366 20%, var(--wa-surface));
+          color: #1f7f46;
+        }
+
+        .badge-amber {
+          background: color-mix(in srgb, #f0b429 22%, var(--wa-surface));
+          color: #a66b00;
+        }
+
+        .badge-red {
+          background: color-mix(in srgb, #ef4444 18%, var(--wa-surface));
+          color: #b42318;
+        }
+
+        .btn-glass {
+          background: color-mix(in srgb, var(--wa-green-600) 14%, var(--wa-surface));
+          border: 1px solid color-mix(in srgb, var(--wa-green-600) 36%, var(--wa-border));
+          color: var(--wa-green-700);
+        }
+
+        .btn-glass:hover {
+          background: color-mix(in srgb, var(--wa-green-600) 22%, var(--wa-surface));
+          border-color: var(--wa-green-600);
+          color: var(--wa-green-900);
+        }
       `}</style>
 
       <div className="stats-root">
@@ -584,10 +895,20 @@ const StatsDashboard = () => {
                 </p>
               </div>
               <div className="d-flex align-items-center gap-2">
-                <span className="stats-meta">
+                <button
+                  className="btn btn-sm btn-outline-primary"
+                  onClick={() => fetchFullStats()}
+                  disabled={loading}
+                  aria-label="Refresh analytics"
+                >
                   <i className="ri-refresh-line me-1"></i>
-                  Auto-refresh on load
-                </span>
+                  Refresh
+                </button>
+                {lastUpdated && (
+                  <span className="stats-meta">
+                    Updated {lastUpdated.toLocaleTimeString()}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -668,13 +989,13 @@ const StatsDashboard = () => {
                     <i className="ri-pulse-line me-2"></i> Conversation Activity
                   </h5>
                   <span className="stats-meta">
-                    {filteredConversations.length} conversations
+                    {conversationsWithDirection.length} conversations
                   </span>
                 </div>
                 <div className="table-responsive">
-                  <table className="data-table">
+                  <table className="data-table conversation-table">
                     <thead>
-                      <tr>
+                        <tr>
                         <th><i className="ri-user-3-line me-1"></i> Contact</th>
                         <th><i className="ri-chat-1-line me-1"></i> Last Message</th>
                         <th><i className="ri-calendar-line me-1"></i> Interaction</th>
@@ -685,7 +1006,7 @@ const StatsDashboard = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredConversations.length === 0 ? (
+                      {conversationsWithDirection.length === 0 ? (
                         <tr>
                           <td colSpan={7} style={{ textAlign: 'center', padding: '32px 16px' }}>
                             <i className="ri-inbox-2-line stats-empty-icon"></i>
@@ -693,7 +1014,7 @@ const StatsDashboard = () => {
                           </td>
                         </tr>
                       ) : (
-                        [...filteredConversations]
+                        [...conversationsWithDirection]
                           .sort((a, b) => new Date(b.lastMessageTime || 0).getTime() - new Date(a.lastMessageTime || 0).getTime())
                           .map((c, idx) => (
                             <tr key={`${normalizeContactId(c.contactId) || 'c'}-${idx}`}>
@@ -702,22 +1023,15 @@ const StatsDashboard = () => {
                                     <div className="stats-avatar" style={{ flex: '0 0 36px', width: 36, height: 36 }}>
                                       {(c.contactName || c.contactId).charAt(0).toUpperCase()}
                                     </div>
-                                    <span className="stats-contact-name" style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    <span className="stats-contact-name" style={{ flex: 1 }}>
                                       {c.contactName || c.contactId}
                                     </span>
                                 </div>
                               </td>
-                              <td style={{ maxWidth: 400, cursor: c.lastMessageText ? 'pointer' : 'default' }}
+                              <td style={{ cursor: c.lastMessageText ? 'pointer' : 'default' }}
                                   title={c.lastMessageText || ''}
                                   onClick={() => { if (c.lastMessageText) setPreviewMessage({ text: c.lastMessageText || '', time: c.lastMessageTime || null, contactId: c.contactId }); }}>
-                                <div style={{
-                                  display: '-webkit-box',
-                                  WebkitLineClamp: 2,
-                                  WebkitBoxOrient: 'vertical',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'normal'
-                                }}>{c.lastMessageText || '—'}</div>
+                                <div style={{ whiteSpace: 'normal' }}>{c.lastMessageText || '—'}</div>
                               </td>
                               <td style={{ whiteSpace: 'nowrap' }}>
                                 {c.lastMessageTime ? new Date(c.lastMessageTime).toLocaleString() : '—'}
@@ -729,15 +1043,21 @@ const StatsDashboard = () => {
                                   : <span className="badge-pill badge-green">0</span>}
                               </td>
                               <td>
-                                {(c.unreadCount || 0) > 0
-                                  ? <span className="badge-pill badge-amber"><i className="ri-arrow-down-s-line me-1"></i>In</span>
-                                  : <span className="badge-pill badge-cyan"><i className="ri-arrow-up-s-line me-1"></i>Out</span>}
+                                {c.directionLabel === 'Received' ? (
+                                  <span className="badge-pill badge-amber" title="Last message received">
+                                    <i className="ri-arrow-down-s-line me-1"></i>Received
+                                  </span>
+                                ) : (
+                                  <span className="badge-pill badge-cyan" title="Last message sent">
+                                    <i className="ri-arrow-up-s-line me-1"></i>Sent
+                                  </span>
+                                )}
                               </td>
                               <td>
-                                {convoAgentMap[c.contactId]?.lastRepliedByName
+                                {convoAgentMap[getContactKey(c.contactId)]?.lastRepliedByName
                                   ? <span className="agent-name">
                                       <i className="ri-user-star-fill me-1 accent-icon"></i>
-                                      {convoAgentMap[c.contactId].lastRepliedByName}
+                                      {convoAgentMap[getContactKey(c.contactId)]?.lastRepliedByName}
                                     </span>
                                   : <span className="stats-dash">—</span>}
                               </td>

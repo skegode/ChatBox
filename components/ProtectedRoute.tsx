@@ -16,10 +16,14 @@ const ProtectedRoute = ({
   requiredPermissions = [], 
   requiredPolicy 
 }: ProtectedRouteProps) => {
-  const { isAuthenticated, hasPermission, checkPolicy } = useAuth();
+  const { isAuthenticated, isLoading, hasPermission, checkPolicy } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
+    if (isLoading) {
+      return;
+    }
+
     // First check if user is authenticated
     if (!isAuthenticated) {
       router.replace('/login');
@@ -40,7 +44,11 @@ const ProtectedRoute = ({
     if (requiredPermissions.length > 0 && !hasAllPermissions) {
       router.replace('/dashboard');
     }
-  }, [isAuthenticated, hasPermission, checkPolicy, requiredPermissions, requiredPolicy, router]);
+  }, [isAuthenticated, isLoading, hasPermission, checkPolicy, requiredPermissions, requiredPolicy, router]);
+
+  if (isLoading) {
+    return null;
+  }
 
   return <>{children}</>;
 };
