@@ -51,7 +51,7 @@ type ContextMenu = { x: number; y: number; message: MessageVm } | null;
 interface SendMessagePayload {
   contactId: string;
   messageText: string;
-  contextMessageId: string;
+  contextMessageId?: string | null;
   ContactId?: string;
   MessageText?: string;
   ContextMessageId?: string;
@@ -611,21 +611,15 @@ export default function ChatPage() {
           .map((m) => (m.isIncoming ? getContextIdFromMessage(m) : null))
           .find((id): id is string => Boolean(id)) ?? null;
       const resolvedContextMessageId =
-        quote?.messageId ?? latestIncomingContextMessageId;
-
-      if (!resolvedContextMessageId) {
-        setError("Cannot send reply: no incoming message context found yet.");
-        return false;
-      }
+        quote?.messageId ?? latestIncomingContextMessageId ?? null;
 
       let messageText = hasText ? inputText : "";
       const payloadBase: SendMessagePayload = {
         contactId: phoneNumber,
         messageText,
-        contextMessageId: resolvedContextMessageId,
+        ...(resolvedContextMessageId ? { contextMessageId: resolvedContextMessageId, ContextMessageId: resolvedContextMessageId } : {}),
         ContactId: phoneNumber,
         MessageText: messageText,
-        ContextMessageId: resolvedContextMessageId,
       };
 
       if (!quote?.messageId && quote?.body) {
