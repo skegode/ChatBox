@@ -88,6 +88,19 @@ interface StatusPayload {
   delivered?: boolean;
 }
 
+type SendRoutingMeta = {
+  sourcePhoneNumberId?: string | null;
+  displayPhoneNumber?: string | null;
+  fallbackApplied?: boolean;
+  fallbackFromPhoneNumberId?: string | null;
+  fallbackDroppedContext?: boolean;
+};
+// Temporary mapping from backend findings until a sender-catalog endpoint exists.
+const SENDER_DISPLAY_BY_ID: Record<string, string> = {
+  "880906468434704": "254710822622",
+  "978570415350482": "254706444333",
+};
+
 // helper to detect phone-like strings so we can decide saved vs phone
 function digitsOnly(s?: string) {
   return (s ?? "").replace(/\D/g, "");
@@ -100,6 +113,65 @@ function contactNameLooksLikePhone(candidate?: string, contactId?: string) {
   const b = digitsOnly(contactId ?? "");
   if (!b) return true; // candidate digits but no contactId -> treat as phone
   return a === b || a.endsWith(b) || b.endsWith(a);
+}
+
+function extractSendRoutingMeta(payload: unknown): SendRoutingMeta | null {
+  const readStr = (obj: unknown, key: string): string | null => {
+    if (!obj || typeof obj !== "object") return null;
+    const v = (obj as Record<string, unknown>)[key];
+    if (typeof v === "string" && v.trim()) return v.trim();
+    return null;
+  };
+
+  const readBool = (obj: unknown, key: string): boolean | undefined => {
+    if (!obj || typeof obj !== "object") return undefined;
+    const v = (obj as Record<string, unknown>)[key];
+    if (typeof v === "boolean") return v;
+    return undefined;
+  };
+
+  const envelope = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : null;
+  const dataObj = envelope?.data && typeof envelope.data === "object" ? (envelope.data as Record<string, unknown>) : null;
+  const firstArray = Array.isArray(payload) && payload.length > 0 && typeof payload[0] === "object"
+    ? (payload[0] as Record<string, unknown>)
+    : null;
+  const src = dataObj ?? firstArray ?? envelope;
+  if (!src || typeof src !== "object") return null;
+
+  const sourcePhoneNumberId =
+    readStr(src, "sourcePhoneNumberId") ||
+    readStr(src, "SourcePhoneNumberId") ||
+    readStr(src, "phoneNumberId") ||
+    readStr(src, "PhoneNumberId");
+
+  const displayPhoneNumber =
+    readStr(src, "displayPhoneNumber") ||
+    readStr(src, "DisplayPhoneNumber") ||
+    (sourcePhoneNumberId ? SENDER_DISPLAY_BY_ID[sourcePhoneNumberId] ?? null : null);
+
+  const fallbackApplied =
+    readBool(src, "fallbackApplied") ??
+    readBool(src, "FallbackApplied");
+
+  const fallbackFromPhoneNumberId =
+    readStr(src, "fallbackFromPhoneNumberId") ||
+    readStr(src, "FallbackFromPhoneNumberId");
+
+  const fallbackDroppedContext =
+    readBool(src, "fallbackDroppedContext") ??
+    readBool(src, "FallbackDroppedContext");
+
+  if (!sourcePhoneNumberId && fallbackApplied === undefined && !fallbackFromPhoneNumberId) {
+    return null;
+  }
+
+  return {
+    sourcePhoneNumberId,
+    displayPhoneNumber,
+    fallbackApplied,
+    fallbackFromPhoneNumberId,
+    fallbackDroppedContext,
+  };
 }
 
 function buildContactIdVariants(contactId?: string) {
@@ -237,6 +309,32 @@ function getSendFailureReason(payload: unknown): string | null {
   return null;
 }
 
+function isUnsupportedSenderObjectError(payload: unknown): boolean {
+  if (!payload || typeof payload !== "object") return false;
+  const details = (payload as Record<string, unknown>)["details"];
+  if (!details || typeof details !== "object") return false;
+
+  const code = (details as Record<string, unknown>)["code"];
+  const subcode = (details as Record<string, unknown>)["subcode"];
+  return code === 100 && subcode === 33;
+}
+
+function stripSenderRoutingFields(payload: SendMessagePayload): SendMessagePayload {
+  const {
+    sourcePhoneNumberId,
+    SourcePhoneNumberId,
+    phoneNumberId,
+    PhoneNumberId,
+    from,
+    From,
+    contextMessageId,
+    ContextMessageId,
+    ...rest
+  } = payload;
+
+  return rest;
+}
+
 export default function ChatPage() {
   const params = useParams();
   const chatId = params?.chatId as string | undefined;
@@ -251,6 +349,7 @@ export default function ChatPage() {
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [saveName, setSaveName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [lastSendRoutingMeta, setLastSendRoutingMeta] = useState<SendRoutingMeta | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const statusRetryAtRef = useRef<Record<string, number>>({});
   const router = useRouter();
@@ -614,36 +713,26 @@ export default function ChatPage() {
       if (!hasFile && !hasText) return false;
 
       // Backend requires digits-only contactId (strips + and routes on normalized digits).
+      // WhatsApp API requires E.164 (+prefix) for the actual `to` phone number field.
       const phoneNumber = digitsOnly(chatId || "");
+      const phoneNumberE164 = phoneNumber ? `+${phoneNumber}` : phoneNumber;
 
-      // Find the best inbound message to use as context.
-      // Priority: explicitly quoted message > most recent inbound with a real wamid.
-      const reversedMessages = [...(messages ?? [])].reverse();
-      const latestIncomingWithWamid = reversedMessages.find(
-        (m) => m.isIncoming && Boolean(getContextIdFromMessage(m))
-      ) ?? null;
-
-      // contextMessageId must be a real inbound wamid — never synthetic.
-      const resolvedContextMessageId =
-        (quote?.messageId && getContextIdFromMessage({ ...latestIncomingWithWamid, messageId: quote.messageId, id: 0, messageType: 'text', contactWaId: '', messageDateTime: new Date(), isIncoming: true }))
-        ?? getContextIdFromMessage(latestIncomingWithWamid)
-        ?? null;
-
-      // sourcePhoneNumberId from the context inbound message — backend uses this to pick sender.
-      const contextSourcePhoneNumberId =
-        latestIncomingWithWamid?.sourcePhoneNumberId ?? "";
-      const contextDisplayPhoneNumber =
-        latestIncomingWithWamid?.displayPhoneNumber ?? "";
+      // contextMessageId must be a real inbound wamid and only for explicit reply flow.
+      const contextWamid = quote?.messageId
+        ? getContextIdFromMessage({ messageId: quote.messageId, id: 0, messageType: 'text', contactWaId: '', messageDateTime: new Date(), isIncoming: true })
+        : null;
+      const resolvedContextMessageId = contextWamid ?? null;
 
       let messageText = hasText ? inputText : "";
       const payloadBase: SendMessagePayload = {
-        // digits-only — backend strips + internally
+        // digits-only — backend uses for DB lookup
         contactId: phoneNumber,
         ContactId: phoneNumber,
-        to: phoneNumber,
-        To: phoneNumber,
-        recipient: phoneNumber,
-        Recipient: phoneNumber,
+        // E.164 — passed to WhatsApp API which requires + prefix
+        to: phoneNumberE164,
+        To: phoneNumberE164,
+        recipient: phoneNumberE164,
+        Recipient: phoneNumberE164,
         messageText,
         MessageText: messageText,
         text: messageText,
@@ -655,21 +744,6 @@ export default function ChatPage() {
           ? {
               contextMessageId: resolvedContextMessageId,
               ContextMessageId: resolvedContextMessageId,
-            }
-          : {}),
-        // sourcePhoneNumberId so backend can route to correct sender number
-        ...(contextSourcePhoneNumberId
-          ? {
-              sourcePhoneNumberId: contextSourcePhoneNumberId,
-              SourcePhoneNumberId: contextSourcePhoneNumberId,
-              phoneNumberId: contextSourcePhoneNumberId,
-              PhoneNumberId: contextSourcePhoneNumberId,
-            }
-          : {}),
-        ...(contextDisplayPhoneNumber
-          ? {
-              from: contextDisplayPhoneNumber,
-              From: contextDisplayPhoneNumber,
             }
           : {})
       };
@@ -849,12 +923,54 @@ export default function ChatPage() {
         prev ? [...prev, optimisticMessage] : [optimisticMessage]
       );
 
-      const response = await api.post("/api/Messages/send", payload);
+      let response;
+      try {
+        response = await api.post("/api/Messages/send", payload);
+      } catch (sendErr: unknown) {
+        // Meta code 100/33 means the sender object (phone number id) is invalid
+        // for the current token/business. Retry once using backend default sender.
+        if (axios.isAxiosError(sendErr) && isUnsupportedSenderObjectError(sendErr.response?.data)) {
+          const fallbackPayload = stripSenderRoutingFields(payload);
+          console.warn("Retrying send without explicit sender routing fields due to Meta code 100/33.");
+          try {
+            response = await api.post("/api/Messages/send", fallbackPayload);
+          } catch (retryErr: unknown) {
+            // Some backend deployments support POST /api/Messages as an alternate send path.
+            // Use a minimal payload so backend can choose the default configured sender.
+            if (axios.isAxiosError(retryErr) && isUnsupportedSenderObjectError(retryErr.response?.data)) {
+              const minimalPayload: SendMessagePayload = {
+                contactId: phoneNumber,
+                ContactId: phoneNumber,
+                to: phoneNumberE164,
+                To: phoneNumberE164,
+                recipient: phoneNumberE164,
+                Recipient: phoneNumberE164,
+                messageText,
+                MessageText: messageText,
+                text: messageText,
+                Text: messageText,
+                body: messageText,
+                Body: messageText,
+              };
+              console.warn("Retrying send via /api/Messages minimal payload due to repeated Meta code 100/33.");
+              response = await api.post("/api/Messages", minimalPayload);
+            } else {
+              throw retryErr;
+            }
+          }
+        } else {
+          throw sendErr;
+        }
+      }
 
       if ((response as { status?: number } | null)?.status !== undefined && (response as { status: number }).status >= 200 && (response as { status: number }).status < 300) {
         setQuote(null);
 
         const responseData = (response as { data?: unknown } | null)?.data;
+        const sendRoutingMeta = extractSendRoutingMeta(responseData);
+        if (sendRoutingMeta) {
+          setLastSendRoutingMeta(sendRoutingMeta);
+        }
         const sendFailureReason = getSendFailureReason(responseData);
         if (sendFailureReason) {
           throw new Error(sendFailureReason);
@@ -1007,10 +1123,27 @@ export default function ChatPage() {
       ) ?? null
     : null;
 
+  // For routing badge: use any inbound message with displayPhoneNumber/sourcePhoneNumberId,
+  // regardless of whether it has a wamid — messages may only carry numeric DB IDs.
+  const latestIncomingForRouting =
+    [...(messages ?? [])]
+      .reverse()
+      .find(
+        (m) => m.isIncoming && (Boolean(m.displayPhoneNumber) || Boolean(m.sourcePhoneNumberId))
+      ) ?? null;
+
   const replySourceNumber =
-    resolvedContextMessage?.displayPhoneNumber ||
-    resolvedContextMessage?.sourcePhoneNumberId ||
+    (resolvedContextMessage?.displayPhoneNumber || resolvedContextMessage?.sourcePhoneNumberId) ??
+    latestIncomingForRouting?.displayPhoneNumber ??
+    latestIncomingForRouting?.sourcePhoneNumberId ??
     null;
+
+  const effectiveReplySourceNumber =
+    lastSendRoutingMeta?.displayPhoneNumber ??
+    (lastSendRoutingMeta?.sourcePhoneNumberId
+      ? SENDER_DISPLAY_BY_ID[lastSendRoutingMeta.sourcePhoneNumberId] ?? lastSendRoutingMeta.sourcePhoneNumberId
+      : null) ??
+    replySourceNumber;
 
   return (
     <div className="d-lg-flex">
@@ -1190,21 +1323,27 @@ export default function ChatPage() {
           )}
 
           <div className="mb-2 d-flex flex-wrap gap-2 align-items-center">
-            {latestIncomingMessage?.displayPhoneNumber && (
+            {latestIncomingForRouting?.displayPhoneNumber && (
               <span className="badge bg-light text-dark border" style={{ fontSize: 11, fontWeight: 500 }}>
                 <i className="ri-download-line me-1" />
-                Received on: <strong>{latestIncomingMessage.displayPhoneNumber}</strong>
+                Received on: <strong>{latestIncomingForRouting.displayPhoneNumber}</strong>
               </span>
             )}
-            {replySourceNumber ? (
+            {effectiveReplySourceNumber ? (
               <span className="badge bg-info-subtle text-info-emphasis" style={{ fontSize: 11, fontWeight: 500 }}>
                 <i className="ri-send-plane-line me-1" />
-                Will reply from: <strong>{replySourceNumber}</strong>
+                Reply sender: <strong>{effectiveReplySourceNumber}</strong>
               </span>
             ) : (
               <span className="badge bg-secondary-subtle text-secondary-emphasis" style={{ fontSize: 11, fontWeight: 500 }}>
                 <i className="ri-send-plane-line me-1" />
                 Will use default sender number
+              </span>
+            )}
+            {lastSendRoutingMeta?.fallbackApplied && (
+              <span className="badge bg-warning-subtle text-warning-emphasis" style={{ fontSize: 11, fontWeight: 500 }}>
+                <i className="ri-alert-line me-1" />
+                Sender fallback applied
               </span>
             )}
           </div>

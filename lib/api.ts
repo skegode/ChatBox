@@ -89,14 +89,35 @@ function getProp(obj: unknown, key: string): unknown | undefined {
 }
 
 function parseNestedErrorDetails(data: unknown): string | undefined {
-  const details = getStringProp(data, 'details');
-  if (!details) return undefined;
+  const detailsRaw = getProp(data, 'details');
+  if (!detailsRaw) return undefined;
 
+  // New backend shape: details may already be an object.
+  if (detailsRaw && typeof detailsRaw === 'object') {
+    const providerMessage = getStringProp(detailsRaw, 'providerMessage');
+    const nestedMessage = getStringProp(detailsRaw, 'message');
+    const nestedError = getStringProp(detailsRaw, 'error');
+    const code = getProp(detailsRaw, 'code');
+    const subcode = getProp(detailsRaw, 'subcode');
+
+    const msg = providerMessage || nestedMessage || nestedError;
+    if (msg) {
+      const suffix = code || subcode
+        ? ` (code ${String(code ?? '')}${subcode ? `/${String(subcode)}` : ''})`
+        : '';
+      return `${msg}${suffix}`;
+    }
+    return undefined;
+  }
+
+  const details = typeof detailsRaw === 'string' ? detailsRaw : String(detailsRaw);
   const trimmed = details.trim();
   if (!trimmed) return undefined;
 
   try {
     const parsed = JSON.parse(trimmed);
+    const providerMessage = getStringProp(parsed, 'providerMessage');
+    if (providerMessage) return providerMessage;
     const nestedError = getStringProp(parsed, 'error');
     if (nestedError) return nestedError;
     const nestedMessage = getStringProp(parsed, 'message');
@@ -216,8 +237,27 @@ api.interceptors.response.use(
             if (status === 404) {
               console.warn('Resource not found (404). This may be expected for some contacts.');
             } else if (data && typeof data === 'object') {
-              const errorMsg = getStringProp(data, 'error') || getStringProp(data, 'message');
+              const errorMsg =
+                parseNestedErrorDetails(data) ||
+                getStringProp(data, 'error') ||
+                getStringProp(data, 'message');
               if (errorMsg) console.warn('API message:', errorMsg);
+
+              const details = getProp(data, 'details');
+              if (details && typeof details === 'object') {
+                const code = getProp(details, 'code');
+                const subcode = getProp(details, 'subcode');
+                const provider = getStringProp(details, 'provider');
+                const trace = getStringProp(details, 'fbtrace_id');
+                const requestEcho = getProp(details, 'request');
+                console.warn('API details:', {
+                  provider,
+                  code,
+                  subcode,
+                  trace,
+                  request: requestEcho,
+                });
+              }
             }
           }
         } else {
@@ -226,7 +266,7 @@ api.interceptors.response.use(
 
         // If there is a request payload for mutating requests, log it at debug level (warn here)
         if (["POST", "PUT", "PATCH"].includes(method) && config?.data) {
-          console.warn('Request payload (truncated):', String(config.data).slice(0, 200));
+          console.warn('Request payload:', String(config.data).slice(0, 2000));
         }
 
       const errorText = getStringProp(data, 'error');
