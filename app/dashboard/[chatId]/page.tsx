@@ -95,6 +95,15 @@ function buildContactIdVariants(contactId?: string) {
   return Array.from(new Set([raw, digits, plus].filter(Boolean)));
 }
 
+function getErrorStatus(err: unknown): number | undefined {
+  if (axios.isAxiosError(err)) return err.response?.status;
+  if (err && typeof err === "object" && "statusCode" in err) {
+    const statusCode = (err as { statusCode?: unknown }).statusCode;
+    if (typeof statusCode === "number") return statusCode;
+  }
+  return undefined;
+}
+
 function inferMediaTypeFromFile(file: File): string {
   const mime = String(file.type || "").toLowerCase();
   if (mime.startsWith("image/")) return "image";
