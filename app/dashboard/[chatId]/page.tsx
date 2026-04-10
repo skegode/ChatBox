@@ -104,6 +104,23 @@ function getErrorStatus(err: unknown): number | undefined {
   return undefined;
 }
 
+function getErrorMessage(err: unknown): string {
+  if (axios.isAxiosError(err)) {
+    return (
+      err.response?.data?.error ||
+      err.response?.data?.message ||
+      err.message ||
+      ""
+    );
+  }
+  if (err && typeof err === "object") {
+    const maybe = err as { message?: unknown; errorMessage?: unknown };
+    if (typeof maybe.errorMessage === "string" && maybe.errorMessage.trim()) return maybe.errorMessage;
+    if (typeof maybe.message === "string" && maybe.message.trim()) return maybe.message;
+  }
+  return "";
+}
+
 function inferMediaTypeFromFile(file: File): string {
   const mime = String(file.type || "").toLowerCase();
   if (mime.startsWith("image/")) return "image";
