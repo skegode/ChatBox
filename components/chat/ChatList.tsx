@@ -28,6 +28,8 @@ export type Conversation = {
   // optional media preview helpers
   lastMediaPath?: string | null;
   lastMessageType?: string | null;
+  lastDisplayPhoneNumber?: string | null;
+  lastSourcePhoneNumberId?: string | null;
 };
 
 export default function ChatList() {
@@ -83,6 +85,8 @@ export default function ChatList() {
             lastMessageType: n.lastMessageType ?? (p as any)?.lastMessageType ?? undefined,
             lastMessageDirection: n.lastMessageDirection ?? p?.lastMessageDirection ?? undefined,
             lastMessageStatus: n.lastMessageStatus ?? p?.lastMessageStatus ?? undefined,
+            lastDisplayPhoneNumber: n.lastDisplayPhoneNumber ?? p?.lastDisplayPhoneNumber ?? undefined,
+            lastSourcePhoneNumberId: n.lastSourcePhoneNumberId ?? p?.lastSourcePhoneNumberId ?? undefined,
           } as Conversation;
         });
       });
@@ -90,20 +94,20 @@ export default function ChatList() {
       // For chats that don't include a last message preview, fetch lightweight previews in background
       (async () => {
           try {
-          if (!showLoading) return;
           // Run background preview fetches on the client regardless of a local token
           // so the sidebar can display last-message previews for chats even when
           // the client hasn't stored a token locally (for example when auth is
           // cookie-based or managed server-side).
           if (typeof window === 'undefined') return; // server-side safety
           const missingAll = (normalized as Conversation[])
-            .filter(c => (!(c.lastMessageText) || !c.lastMessageStatus) && c.contactId)
+            .filter(c => (!(c.lastMessageText) || !c.lastMessageStatus || !c.lastDisplayPhoneNumber) && c.contactId)
             .map(c => c.contactId);
           if (missingAll.length === 0) return;
 
           const now = Date.now();
           const retryDelayMs = 90_000;
-          const maxFetchPreviews = 10;
+          // Process all missing rows in controlled batches so the entire list gets enriched.
+          const maxFetchPreviews = missingAll.length;
           const toFetch = missingAll
             .filter((contactId) => {
               const key = normalizeContactId(contactId) || contactId;
@@ -115,7 +119,16 @@ export default function ChatList() {
           if (toFetch.length === 0) return;
 
           const batchSize = 5;
-          type PreviewEntry = { lastMessageText?: string | null; lastMessageTime?: string | Date | null; lastMediaPath?: string | null; lastMessageType?: string | null; lastMessageDirection?: 'incoming' | 'outgoing' | null; lastMessageStatus?: string | null };
+          type PreviewEntry = {
+            lastMessageText?: string | null;
+            lastMessageTime?: string | Date | null;
+            lastMediaPath?: string | null;
+            lastMessageType?: string | null;
+            lastMessageDirection?: 'incoming' | 'outgoing' | null;
+            lastMessageStatus?: string | null;
+            lastDisplayPhoneNumber?: string | null;
+            lastSourcePhoneNumberId?: string | null;
+          };
           const previewsCache: Record<string, PreviewEntry> = {};
 
           for (let i = 0; i < toFetch.length; i += batchSize) {
@@ -166,6 +179,9 @@ export default function ChatList() {
                 if (msgs && msgs.length > 0) {
                   msgs.sort((a, b) => new Date((b as any).messageDateTime).getTime() - new Date((a as any).messageDateTime).getTime());
                   const last = msgs[0];
+                  const latestIncomingWithDisplay = msgs.find(
+                    (m) => Boolean((m as any).isIncoming) && Boolean((m as any).displayPhoneNumber)
+                  );
                   let previewText = last.messageText ?? null;
                   if (!previewText && (last.mediaPath || last.messageType)) {
                     const mt = (last.messageType || "").toString().toLowerCase();
@@ -179,6 +195,10 @@ export default function ChatList() {
                     lastMessageType: last.messageType ?? null,
                     lastMessageDirection: last.isIncoming ? 'incoming' : 'outgoing',
                     lastMessageStatus: null,
+                    // Keep "received on" bound to the latest inbound message metadata,
+                    // even if the latest message in thread is outbound.
+                    lastDisplayPhoneNumber: (latestIncomingWithDisplay as any)?.displayPhoneNumber ?? null,
+                    lastSourcePhoneNumberId: (latestIncomingWithDisplay as any)?.sourcePhoneNumberId ?? null,
                   };
                   previewsCache[contactId] = entry;
                   previewsCache[normalizeContactId(contactId)] = entry;
@@ -241,6 +261,8 @@ export default function ChatList() {
                   lastMessageType: ch.lastMessageType ?? p.lastMessageType ?? ch.lastMessageType,
                   lastMessageDirection: ch.lastMessageDirection ?? p.lastMessageDirection ?? ch.lastMessageDirection,
                   lastMessageStatus: safeStatus,
+                  lastDisplayPhoneNumber: ch.lastDisplayPhoneNumber ?? p.lastDisplayPhoneNumber ?? ch.lastDisplayPhoneNumber,
+                  lastSourcePhoneNumberId: ch.lastSourcePhoneNumberId ?? p.lastSourcePhoneNumberId ?? ch.lastSourcePhoneNumberId,
                 } as Conversation;
               }));
             }

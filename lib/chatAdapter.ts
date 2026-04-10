@@ -14,6 +14,8 @@ export type ConversationView = {
   lastMessageDirection?: 'incoming' | 'outgoing' | null;
   isLastMessageIncoming?: boolean | null;
   lastMessageStatus?: string | null;
+  lastDisplayPhoneNumber?: string | null;
+  lastSourcePhoneNumberId?: string | null;
   contactAvatarUrl?: string | null;
 };
 
@@ -60,6 +62,20 @@ export function normalizeConversations(input: unknown): ConversationView[] {
       'lastStatus',
       'messageStatus',
     ]) ?? null;
+    const lastDisplayPhoneNumber = firstString(c, [
+      'lastDisplayPhoneNumber',
+      'displayPhoneNumber',
+      'DisplayPhoneNumber',
+      'sourcePhoneNumber',
+      'SourcePhoneNumber',
+    ]) ?? null;
+    const lastSourcePhoneNumberId = firstString(c, [
+      'lastSourcePhoneNumberId',
+      'sourcePhoneNumberId',
+      'SourcePhoneNumberId',
+      'phoneNumberId',
+      'PhoneNumberId',
+    ]) ?? null;
     const contactAvatarUrl = firstString(c, ['contactAvatarUrl', 'avatarUrl', 'avatar']) ?? null;
 
     return {
@@ -72,6 +88,8 @@ export function normalizeConversations(input: unknown): ConversationView[] {
       lastMessageDirection,
       isLastMessageIncoming,
       lastMessageStatus,
+      lastDisplayPhoneNumber,
+      lastSourcePhoneNumberId,
       contactAvatarUrl,
     };
   });

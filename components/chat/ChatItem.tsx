@@ -144,6 +144,13 @@ function ChatItemInner({ chat }: { chat: Conversation }) {
             <span className="text-truncate">{truncateText(chat?.lastMessageText ?? 'No messages yet', 25)}</span>
           )}
         </p>
+        {chat?.lastDisplayPhoneNumber && (
+          <p className="mb-0 mt-1">
+            <span className="badge bg-light text-muted" style={{ fontSize: 10, fontWeight: 500 }}>
+              received on {chat.lastDisplayPhoneNumber}
+            </span>
+          </p>
+        )}
       </div>
       <div className="font-size-11">{formatDate(lastAt)}</div>
       {unread > 0 && (
@@ -166,6 +173,7 @@ function areEqual(prev: { chat: Conversation }, next: { chat: Conversation }) {
     a.contactName === b.contactName &&
     a.lastMessageText === b.lastMessageText &&
     (a as any).lastMediaPath === (b as any).lastMediaPath &&
+    (a as any).lastDisplayPhoneNumber === (b as any).lastDisplayPhoneNumber &&
     a.lastMessageTime === b.lastMessageTime &&
     (a.unreadCount ?? 0) === (b.unreadCount ?? 0) &&
     a.lastMessageDirection === b.lastMessageDirection &&
