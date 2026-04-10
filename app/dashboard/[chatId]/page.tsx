@@ -358,8 +358,10 @@ export default function ChatPage() {
   const getContextIdFromMessage = (m?: MessageVm | null): string | null => {
     if (!m) return null;
     const explicit = String(m.messageId ?? "").trim();
-    if (explicit && !explicit.startsWith("temp-")) return explicit;
-    return null;
+    if (!explicit || explicit.startsWith("temp-")) return null;
+    // WhatsApp context IDs are not numeric DB row IDs; reject numeric-only values.
+    if (/^\d+$/.test(explicit)) return null;
+    return explicit;
   };
 
   async function fetchConversationData(targetChatId: string) {
