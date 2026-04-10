@@ -52,9 +52,15 @@ interface SendMessagePayload {
   contactId: string;
   messageText: string;
   contextMessageId?: string | null;
+  to?: string;
+  text?: string;
+  body?: string;
   ContactId?: string;
   MessageText?: string;
   ContextMessageId?: string;
+  To?: string;
+  Text?: string;
+  Body?: string;
   mediaId?: string;
   mediaType?: string;
   mediaLocalPath?: string;
@@ -615,14 +621,24 @@ export default function ChatPage() {
         contactId: phoneNumber,
         messageText,
         ...(resolvedContextMessageId ? { contextMessageId: resolvedContextMessageId, ContextMessageId: resolvedContextMessageId } : {}),
+        to: phoneNumber,
+        text: messageText,
+        body: messageText,
         ContactId: phoneNumber,
         MessageText: messageText,
+        To: phoneNumber,
+        Text: messageText,
+        Body: messageText,
       };
 
       if (!quote?.messageId && quote?.body) {
         messageText = hasText ? `> ${quote.body}\n\n${inputText}` : "";
         payloadBase.messageText = messageText;
         payloadBase.MessageText = messageText;
+        payloadBase.text = messageText;
+        payloadBase.Text = messageText;
+        payloadBase.body = messageText;
+        payloadBase.Body = messageText;
       }
 
       let mediaMeta: {
@@ -716,6 +732,10 @@ export default function ChatPage() {
         if (!hasText) {
           payload.messageText = "";
           payload.MessageText = "";
+          payload.text = "";
+          payload.Text = "";
+          payload.body = "";
+          payload.Body = "";
         }
       }
 
