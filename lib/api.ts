@@ -88,6 +88,29 @@ function getProp(obj: unknown, key: string): unknown | undefined {
   return undefined;
 }
 
+function parseNestedErrorDetails(data: unknown): string | undefined {
+  const details = getStringProp(data, 'details');
+  if (!details) return undefined;
+
+  const trimmed = details.trim();
+  if (!trimmed) return undefined;
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    const nestedError = getStringProp(parsed, 'error');
+    if (nestedError) return nestedError;
+    const nestedMessage = getStringProp(parsed, 'message');
+    if (nestedMessage) return nestedMessage;
+    const nestedErrorObj = getProp(parsed, 'error');
+    const nestedObjMessage = getStringProp(nestedErrorObj, 'message');
+    if (nestedObjMessage) return nestedObjMessage;
+  } catch {
+    // details is plain string
+  }
+
+  return trimmed;
+}
+
 // Add request interceptor for auth and debugging
 api.interceptors.request.use((config) => {
   // Attach JWT token if available
@@ -206,8 +229,14 @@ api.interceptors.response.use(
           console.warn('Request payload (truncated):', String(config.data).slice(0, 200));
         }
 
+      const errorText = getStringProp(data, 'error');
+      const messageText = getStringProp(data, 'message');
+      const nestedDetails = parseNestedErrorDetails(data);
       const derivedMessage =
-        (getStringProp(data, 'error') || getStringProp(data, 'message')) ||
+        (nestedDetails && errorText ? `${errorText}: ${nestedDetails}` : undefined) ||
+        nestedDetails ||
+        errorText ||
+        messageText ||
         ae.message ||
         'Unknown API error';
 

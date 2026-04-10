@@ -55,12 +55,20 @@ interface SendMessagePayload {
   to?: string;
   text?: string;
   body?: string;
+  recipient?: string;
+  sourcePhoneNumberId?: string;
+  phoneNumberId?: string;
+  from?: string;
   ContactId?: string;
   MessageText?: string;
   ContextMessageId?: string;
   To?: string;
   Text?: string;
   Body?: string;
+  Recipient?: string;
+  SourcePhoneNumberId?: string;
+  PhoneNumberId?: string;
+  From?: string;
   mediaId?: string;
   mediaType?: string;
   mediaLocalPath?: string;
@@ -608,6 +616,7 @@ export default function ChatPage() {
       if (!hasFile && !hasText) return false;
 
       const phoneNumber = digitsOnly(chatId || "");
+      const phoneNumberE164 = phoneNumber ? `+${phoneNumber}` : "";
       const latestIncomingContextMessageId =
         [...(messages ?? [])]
           .reverse()
@@ -615,20 +624,54 @@ export default function ChatPage() {
           .find((id): id is string => Boolean(id)) ?? null;
       const resolvedContextMessageId =
         quote?.messageId ?? latestIncomingContextMessageId ?? null;
+      const contextSourcePhoneNumberId =
+        [...(messages ?? [])]
+          .reverse()
+          .find(
+            (m) =>
+              m.isIncoming &&
+              Boolean(getContextIdFromMessage(m)) &&
+              Boolean(m.sourcePhoneNumberId)
+          )?.sourcePhoneNumberId ?? "";
+      const contextDisplayPhoneNumber =
+        [...(messages ?? [])]
+          .reverse()
+          .find(
+            (m) =>
+              m.isIncoming &&
+              Boolean(getContextIdFromMessage(m)) &&
+              Boolean(m.displayPhoneNumber)
+          )?.displayPhoneNumber ?? "";
 
       let messageText = hasText ? inputText : "";
       const payloadBase: SendMessagePayload = {
         contactId: phoneNumber,
         messageText,
         ...(resolvedContextMessageId ? { contextMessageId: resolvedContextMessageId, ContextMessageId: resolvedContextMessageId } : {}),
-        to: phoneNumber,
+        to: phoneNumberE164 || phoneNumber,
         text: messageText,
         body: messageText,
+        recipient: phoneNumberE164 || phoneNumber,
+        ...(contextSourcePhoneNumberId
+          ? {
+              sourcePhoneNumberId: contextSourcePhoneNumberId,
+              SourcePhoneNumberId: contextSourcePhoneNumberId,
+              phoneNumberId: contextSourcePhoneNumberId,
+              PhoneNumberId: contextSourcePhoneNumberId,
+            }
+          : {}),
+        ...(contextDisplayPhoneNumber
+          ? {
+              from: contextDisplayPhoneNumber,
+              From: contextDisplayPhoneNumber,
+            }
+          : {}),
         ContactId: phoneNumber,
         MessageText: messageText,
-        To: phoneNumber,
+        To: phoneNumberE164 || phoneNumber,
         Text: messageText,
         Body: messageText,
+        Recipient: phoneNumberE164 || phoneNumber,
       };
 
       if (!quote?.messageId && quote?.body) {
