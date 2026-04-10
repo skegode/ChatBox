@@ -359,12 +359,7 @@ export default function ChatPage() {
     if (!m) return null;
     const explicit = String(m.messageId ?? "").trim();
     if (explicit && !explicit.startsWith("temp-")) return explicit;
-
-    const fallbackId = String(m.id ?? "").trim();
-    if (!fallbackId || fallbackId === "0" || fallbackId.startsWith("temp-")) {
-      return null;
-    }
-    return fallbackId;
+    return null;
   };
 
   async function fetchConversationData(targetChatId: string) {
