@@ -48,12 +48,18 @@ export function normalizeConversations(input: unknown): ConversationView[] {
     const contactId = firstString(c, ['contactId', 'phoneNumber', 'phone', 'contactWaId', 'id']) ?? '';
     const contactName = firstString(c, ['contactName', 'name', 'displayName', 'contactName']) ?? null;
     const lastMessageText = firstString(c, ['lastMessageText', 'lastMessage', 'lastMessageBody', 'body']) ?? null;
-    const lastMessageTime = firstString(c, ['lastMessageAt', 'lastMessageTime', 'updatedAt', 'timestamp']) ?? null;
+    const lastMessageTime = firstString(c, ['lastMessageAt', 'lastMessageTime', 'lastUpdated', 'updatedAt', 'timestamp']) ?? null;
     const unreadCount = typeof c['unreadCount'] === 'number' ? (c['unreadCount'] as number) : (typeof c['unread'] === 'number' ? (c['unread'] as number) : 0);
     const messageCount = typeof c['messageCount'] === 'number' ? (c['messageCount'] as number) : (typeof c['messagesCount'] === 'number' ? (c['messagesCount'] as number) : 0);
     const lastMessageDirection = typeof c['lastMessageDirection'] === 'string' ? (c['lastMessageDirection'] as 'incoming'|'outgoing') : undefined;
     const isLastMessageIncoming = lastMessageDirection === 'incoming' ? true : lastMessageDirection === 'outgoing' ? false : null;
-    const lastMessageStatus = firstString(c, ['lastMessageStatus', 'status']) ?? null;
+    const lastMessageStatus = firstString(c, [
+      'lastMessageStatus',
+      'status',
+      'deliveryStatus',
+      'lastStatus',
+      'messageStatus',
+    ]) ?? null;
     const contactAvatarUrl = firstString(c, ['contactAvatarUrl', 'avatarUrl', 'avatar']) ?? null;
 
     return {
@@ -75,6 +81,9 @@ export function normalizeConversations(input: unknown): ConversationView[] {
 export type MessageVm = {
   id: number | string;
   messageId?: string | null;
+  isOutgoing?: boolean;
+  sourcePhoneNumberId?: string | null;
+  displayPhoneNumber?: string | null;
   messageType: ChatMessageType;
   mediaId?: string | null;
   mediaFileName?: string | null;
@@ -94,8 +103,28 @@ export type MessageVm = {
 export function normalizeMessages(input: unknown, contactIdFallback?: string): MessageVm[] {
   const arr: Raw[] = Array.isArray(input) ? input as Raw[] : (input && typeof input === 'object' && 'items' in (input as any) && Array.isArray((input as any).items) ? (input as any).items : []);
   return arr.map((m) => {
-    const id = m['id'] ?? m['messageId'] ?? m['msgId'] ?? m['message_id'] ?? 0;
-    const messageId = typeof m['messageId'] === 'string' ? (m['messageId'] as string) : typeof m['message_id'] === 'string' ? (m['message_id'] as string) : (typeof m['msgId'] === 'string' ? (m['msgId'] as string) : (typeof id === 'string' ? id : undefined));
+    const id = m['id'] ?? m['messageId'] ?? m['msgId'] ?? m['message_id'] ?? m['wamid'] ?? m['waMessageId'] ?? 0;
+    const messageId = firstString(m, [
+      'messageId',
+      'MessageId',
+      'message_id',
+      'msgId',
+      'MsgId',
+      'waMessageId',
+      'WaMessageId',
+      'whatsAppMessageId',
+      'WhatsAppMessageId',
+      'whatsappMessageId',
+      'WhatsappMessageId',
+      'wamid',
+      'Wamid',
+      'wamId',
+      'WamId',
+      'whatsappId',
+      'WhatsAppId',
+      'externalMessageId',
+      'ExternalMessageId',
+    ]) ?? (typeof id === 'string' ? id : undefined);
     const messageType = normalizeMessageType(firstString(m, ['messageType', 'type', 'mediaType']));
     const isAttachment = messageType !== 'text';
     const mediaId = isAttachment ? sanitizeMediaId(firstString(m, ['mediaId', 'MediaId', 'whatsAppMediaId', 'imageId', 'attachmentId']) ?? null) : null;
@@ -105,19 +134,47 @@ export function normalizeMessages(input: unknown, contactIdFallback?: string): M
     const contactWaId = firstString(m, ['contactWaId', 'contactId', 'phoneNumber', 'phone', 'to', 'recipient']) ?? (contactIdFallback ?? '');
     const contactName = firstString(m, ['contactName', 'name', 'senderName', 'displayName']) ?? null;
     const messageText = firstString(m, ['messageText', 'text', 'body', 'message']) ?? null;
+    const sourcePhoneNumberId = firstString(m, ['sourcePhoneNumberId', 'SourcePhoneNumberId', 'phoneNumberId', 'PhoneNumberId', 'sourcePhoneId', 'SourcePhoneId']) ?? null;
+    const displayPhoneNumber = firstString(m, ['displayPhoneNumber', 'DisplayPhoneNumber', 'sourcePhoneNumber', 'SourcePhoneNumber', 'phoneNumberDisplay', 'PhoneNumberDisplay']) ?? null;
     const mediaPath = isAttachment
       ? (firstString(m, ['mediaPath', 'MediaPath', 'media', 'filePath', 'MediaLocalPath', 'mediaLocalPath']) ?? null)
       : null;
     const msgTimeRaw = firstString(m, ['messageDateTime', 'timestamp', 'createdAt', 'time']) ?? new Date().toISOString();
     const messageDateTime = typeof msgTimeRaw === 'string' ? new Date(msgTimeRaw) : new Date();
-    const isIncoming = (typeof m['isIncoming'] === 'boolean' ? m['isIncoming'] as boolean : (m['direction'] === 'incoming' || (m['from'] && String(m['from']).toLowerCase() !== 'me'))) as boolean;
-    const contextMessageId = (typeof m['contextMessageId'] === 'string' ? m['contextMessageId'] as string : typeof m['replyTo'] === 'string' ? m['replyTo'] as string : undefined) ?? null;
+    const isOutgoingRaw = typeof m['isOutgoing'] === 'boolean'
+      ? (m['isOutgoing'] as boolean)
+      : (typeof m['IsOutgoing'] === 'boolean' ? (m['IsOutgoing'] as boolean) : undefined);
+    const isIncomingRaw = typeof m['isIncoming'] === 'boolean'
+      ? (m['isIncoming'] as boolean)
+      : (typeof m['IsIncoming'] === 'boolean' ? (m['IsIncoming'] as boolean) : undefined);
+    const isOutgoing = typeof isOutgoingRaw === 'boolean'
+      ? isOutgoingRaw
+      : (m['direction'] === 'outgoing');
+    const isIncoming = typeof isIncomingRaw === 'boolean'
+      ? isIncomingRaw
+      : (typeof isOutgoingRaw === 'boolean'
+        ? !isOutgoingRaw
+        : (m['direction'] === 'incoming' || (m['from'] && String(m['from']).toLowerCase() !== 'me'))) as boolean;
+    const contextMessageId = (
+      typeof m['contextMessageId'] === 'string'
+        ? m['contextMessageId'] as string
+        : typeof m['ContextMessageId'] === 'string'
+          ? m['ContextMessageId'] as string
+          : typeof m['replyTo'] === 'string'
+            ? m['replyTo'] as string
+            : typeof m['ReplyTo'] === 'string'
+              ? m['ReplyTo'] as string
+              : undefined
+    ) ?? null;
     const sentBy = typeof m['sentBy'] === 'number' ? (m['sentBy'] as number) : typeof m['senderId'] === 'number' ? (m['senderId'] as number) : null;
     const senderName = firstString(m, ['senderName', 'fromName', 'displayName']) ?? null;
 
     return {
       id: id as any,
       messageId: messageId ?? null,
+      isOutgoing,
+      sourcePhoneNumberId,
+      displayPhoneNumber,
       messageType,
       mediaId,
       mediaFileName,

@@ -1,0 +1,89 @@
+/* ─────────────────────────────────────────────────────────────────
+   Landing page styles
+   ───────────────────────────────────────────────────────────────── */
+
+/* ── Reset wa-theme body override on landing pages ── */
+body.landing-page {
+  background: #fff !important;
+  color: #495057 !important;
+}
+
+/* ── Navbar ── */
+.landing-navbar {
+  background: #fff !important;
+  padding: 14px 0;
+  box-shadow: 0 2px 18px rgba(0, 0, 0, 0.08);
+  transition: all 0.4s ease;
+}
+
+.landing-navbar .logo-dark {
+  height: 50px;
+}
+
+.landing-nav-link {
+  color: #495057 !important;
+  font-weight: 500;
+  font-size: 15px;
+  padding: 6px 14px !important;
+  transition: color 0.2s;
+}
+
+.landing-nav-link:hover {
+  color: #128c7e !important;
+}
+
+/* ── Hero Section ── */
+.landing-hero {
+  padding-top: 130px;
+  padding-bottom: 80px;
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+  position: relative;
+  min-height: 480px;
+  overflow: hidden;
+}
+
+.landing-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.72);
+  z-index: 0;
+}
+
+.landing-hero .container {
+  position: relative;
+  z-index: 1;
+}
+
+.hero-1-title.landing-heading {
+  font-size: 2.4rem;
+  font-weight: 800;
+  color: #1f2c34;
+  line-height: 1.25;
+}
+
+.landing-accent {
+  color: #128c7e;
+}
+
+/* ── Features Section ── */
+.landing-features {
+  background: #f6f8f9;
+}
+
+/* ── Footer ── */
+.landing-footer {
+  background: #1f2c34;
+  color: rgba(255, 255, 255, 0.7);
+  padding: 40px 0 20px;
+}
+
+.landing-footer a {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.landing-footer a:hover {
+  color: #fff;
+}

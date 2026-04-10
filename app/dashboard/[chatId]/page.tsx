@@ -15,8 +15,11 @@ import axios from "axios";
 type ChatMessageType = "text" | "image" | "video" | "audio" | "pdf" | "document";
 
 type MessageVm = {
-  id: number;
+  id: number | string;
   messageId?: string | null;
+  isOutgoing?: boolean;
+  sourcePhoneNumberId?: string | null;
+  displayPhoneNumber?: string | null;
   messageType: ChatMessageType;
   mediaId?: string | null;
   mediaFileName?: string | null;
@@ -46,37 +49,24 @@ type SelectedQuote = {
 type ContextMenu = { x: number; y: number; message: MessageVm } | null;
 
 interface SendMessagePayload {
-  ContactId: string;
-  MessageText: string;
+  contactId: string;
+  messageText: string;
+  contextMessageId: string;
+  ContactId?: string;
+  MessageText?: string;
   ContextMessageId?: string;
-  MediaId?: string;
-  MediaType?: string;
-  MediaLocalPath?: string;
-  MediaUrl?: string;
-  FileName?: string;
-  MediaFileName?: string;
-  contactId?: string;
-  text?: string;
-  contextMessageId?: string;
   mediaId?: string;
   mediaType?: string;
   mediaLocalPath?: string;
   mediaUrl?: string;
   fileName?: string;
   mediaFileName?: string;
-  To?: string;
-  to?: string;
-  PhoneNumber?: string;
-  phoneNumber?: string;
-  Body?: string;
-  body?: string;
-  From?: string;
-  from?: string;
-  message?: string;
-  Recipient?: string;
-  recipient?: string;
-  ContactWaId?: string;
-  contactWaId?: string;
+  MediaId?: string;
+  MediaType?: string;
+  MediaLocalPath?: string;
+  MediaUrl?: string;
+  FileName?: string;
+  MediaFileName?: string;
 }
 
 interface StatusPayload {
@@ -128,34 +118,85 @@ function normalizeOutboundMediaType(v?: string | null, file?: File | null): Chat
   return "document";
 }
 
-function getErrorStatus(err: unknown): number | undefined {
-  if (axios.isAxiosError(err)) return err.response?.status;
-  if (err && typeof err === "object" && "statusCode" in err) {
-    const statusCode = (err as { statusCode?: unknown }).statusCode;
-    if (typeof statusCode === "number") return statusCode;
-  }
-  return undefined;
-}
+function getSendFailureReason(payload: unknown): string | null {
+  const readString = (obj: unknown, key: string): string => {
+    if (!obj || typeof obj !== "object") return "";
+    const value = (obj as Record<string, unknown>)[key];
+    return typeof value === "string" ? value.trim() : "";
+  };
 
-function getErrorMessage(err: unknown): string {
-  if (axios.isAxiosError(err)) {
-    return (
-      err.response?.data?.error ||
-      err.response?.data?.message ||
-      err.message ||
-      ""
-    );
-  }
-  if (err && typeof err === "object") {
-    const maybe = err as { message?: unknown; errorMessage?: unknown };
-    if (typeof maybe.errorMessage === "string" && maybe.errorMessage.trim()) {
-      return maybe.errorMessage;
+  const parseNestedDetails = (details: string): string => {
+    const trimmed = details.trim();
+    if (!trimmed) return "";
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      const nestedError = readString(parsed, "error");
+      if (nestedError) return nestedError;
+      const nestedMessage = readString(parsed, "message");
+      if (nestedMessage) return nestedMessage;
+      if (parsed && typeof parsed === "object") {
+        const errObj = (parsed as Record<string, unknown>)["error"];
+        const errMessage = readString(errObj, "message");
+        if (errMessage) return errMessage;
+      }
+    } catch {
+      // ignore parse failure and use raw details string
     }
-    if (typeof maybe.message === "string" && maybe.message.trim()) {
-      return maybe.message;
+    return trimmed;
+  };
+
+  if (typeof payload === "string") {
+    const txt = payload.trim();
+    if (/whatsapp send failed|oauth|invalid access token|unauthorized|forbidden/i.test(txt)) {
+      return txt;
     }
+    return null;
   }
-  return "";
+
+  if (!payload || typeof payload !== "object") return null;
+
+  const errorText = readString(payload, "error");
+  const messageText = readString(payload, "message");
+  const detailsText = readString(payload, "details");
+  const errorsValue = (payload as Record<string, unknown>)["errors"];
+
+  if (errorsValue && typeof errorsValue === "object") {
+    const flattened = Object.entries(errorsValue as Record<string, unknown>)
+      .map(([field, value]) => {
+        if (Array.isArray(value)) {
+          return `${field}: ${value.map((v) => String(v)).join(", ")}`;
+        }
+        if (typeof value === "string") {
+          return `${field}: ${value}`;
+        }
+        return "";
+      })
+      .filter(Boolean)
+      .join(" | ");
+    if (flattened) return flattened;
+  }
+
+  if (errorText) {
+    const detailReason = parseNestedDetails(detailsText);
+    return detailReason ? `${errorText}: ${detailReason}` : errorText;
+  }
+
+  const successValue = (payload as Record<string, unknown>)["success"];
+  const okValue = (payload as Record<string, unknown>)["ok"];
+  const statusValue = String((payload as Record<string, unknown>)["status"] ?? "").toLowerCase();
+  const explicitlyFailed =
+    successValue === false ||
+    okValue === false ||
+    statusValue === "failed" ||
+    statusValue === "error";
+
+  if (explicitlyFailed) {
+    if (messageText) return messageText;
+    if (detailsText) return parseNestedDetails(detailsText) || detailsText;
+    return "Message send was rejected by upstream";
+  }
+
+  return null;
 }
 
 export default function ChatPage() {
@@ -173,6 +214,7 @@ export default function ChatPage() {
   const [saveName, setSaveName] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const statusRetryAtRef = useRef<Record<string, number>>({});
   const router = useRouter();
   const { user, isAuthenticated, isLoading, checkPolicy } = useAuth();
   const canViewAllChats = checkPolicy(PERMISSIONS.POLICY_VIEW_ALL_CHATS);
@@ -196,30 +238,152 @@ export default function ChatPage() {
   }, [chatId, isAuthenticated, isLoading, router]);
 
   const buildMsgKey = (m: MessageVm) => {
-    if (m.messageId) return String(m.messageId);
+    const messageId = String(m.messageId ?? '').trim().toLowerCase();
+    if (messageId && !messageId.startsWith('temp-')) return `mid:${messageId}`;
+
+    const numericId = String(m.id ?? '').trim();
+    if (numericId && numericId !== '0') return `id:${numericId}`;
+
     const ts = new Date(m.messageDateTime).getTime();
-    return `${m.id}-${ts}`;
+    const body = String(m.messageText ?? '').trim().toLowerCase();
+    const media = String(m.mediaPath ?? '').trim().toLowerCase();
+    const direction = m.isIncoming ? 'in' : 'out';
+    const contact = String(m.contactWaId ?? '').replace(/\D/g, '');
+    // Fallback fingerprint for duplicate webhook payloads with missing IDs.
+    return `fp:${contact}:${direction}:${ts}:${m.messageType}:${body}:${media}`;
   };
 
   const dedupeAndSort = (arr: MessageVm[]) => {
-    const seen = new Set<string>();
-    const items: MessageVm[] = [];
+    const byKey = new Map<string, MessageVm>();
+    const scoreMessage = (m: MessageVm) =>
+      (m.messageId ? 4 : 0) +
+      (m.mediaPath ? 2 : 0) +
+      (m.messageText ? 1 : 0);
+
+    const signature = (m: MessageVm) => {
+      const contact = String(m.contactWaId ?? '').replace(/\D/g, '');
+      const type = String(m.messageType ?? '').toLowerCase();
+      const body = String(m.messageText ?? '').trim().toLowerCase();
+      const media = String(m.mediaPath ?? '').trim().toLowerCase();
+      return `${contact}:${type}:${body}:${media}`;
+    };
 
     for (const m of arr) {
       const key = buildMsgKey(m);
-      if (!seen.has(key)) {
-        seen.add(key);
-        items.push(m);
+      const existing = byKey.get(key);
+      if (!existing) {
+        byKey.set(key, m);
+        continue;
+      }
+
+      // Prefer the richer/latest payload when duplicates collide.
+      const existingScore = scoreMessage(existing);
+      const currentScore = scoreMessage(m);
+      if (currentScore >= existingScore) {
+        byKey.set(key, m);
       }
     }
+
+    const items = Array.from(byKey.values());
 
     items.sort(
       (a, b) =>
         new Date(a.messageDateTime).getTime() -
         new Date(b.messageDateTime).getTime()
     );
-    return items;
+
+    // Second-pass compaction for duplicated inbound webhooks that arrive with
+    // different IDs but identical content and near-identical timestamps.
+    // Looks back through the last 10 messages within the window, not just the
+    // immediately preceding one, to catch non-adjacent duplicates.
+    const compacted: MessageVm[] = [];
+    const DUP_WINDOW_MS = 60_000; // 60 s window
+    for (const m of items) {
+      if (!m.isIncoming) {
+        compacted.push(m);
+        continue;
+      }
+
+      const currTs = new Date(m.messageDateTime).getTime();
+      const sig = signature(m);
+      let foundDup = false;
+
+      // Look back up to 10 recent incoming entries within the window.
+      for (let i = compacted.length - 1; i >= Math.max(0, compacted.length - 10); i--) {
+        const candidate = compacted[i];
+        if (!candidate.isIncoming) continue;
+        const candTs = new Date(candidate.messageDateTime).getTime();
+        if (Number.isFinite(currTs) && Number.isFinite(candTs) && Math.abs(currTs - candTs) > DUP_WINDOW_MS) break;
+        if (signature(candidate) === sig) {
+          if (scoreMessage(m) >= scoreMessage(candidate)) {
+            compacted[i] = m;
+          }
+          foundDup = true;
+          break;
+        }
+      }
+
+      if (!foundDup) compacted.push(m);
+    }
+
+    return compacted;
   };
+
+  const getContextIdFromMessage = (m?: MessageVm | null): string | null => {
+    if (!m) return null;
+    const explicit = String(m.messageId ?? "").trim();
+    if (explicit && !explicit.startsWith("temp-")) return explicit;
+
+    const fallbackId = String(m.id ?? "").trim();
+    if (!fallbackId || fallbackId === "0" || fallbackId.startsWith("temp-")) {
+      return null;
+    }
+    return fallbackId;
+  };
+
+  async function fetchConversationData(targetChatId: string) {
+    const contactIdVariants = buildContactIdVariants(targetChatId);
+    let lastError: unknown = null;
+
+    const tryEndpoint = async (
+      requestFactory: (contactId: string) => Promise<{ data: unknown }>
+    ) => {
+      for (const contactIdVariant of contactIdVariants) {
+        try {
+          return await requestFactory(contactIdVariant);
+        } catch (err) {
+          lastError = err;
+          const status = getErrorStatus(err);
+          if (status === 404 || status === 502 || status === 503) {
+            continue;
+          }
+          throw err;
+        }
+      }
+
+      return null;
+    };
+
+    const pathResponse = await tryEndpoint((contactIdVariant) =>
+      api.get(`/api/Messages/contact/${encodeURIComponent(contactIdVariant)}`)
+    );
+    if (pathResponse) {
+      return pathResponse.data;
+    }
+
+    const queryResponse = await tryEndpoint((contactIdVariant) =>
+      api.get(`/api/Messages`, { params: { contactId: contactIdVariant } })
+    );
+    if (queryResponse) {
+      return queryResponse.data;
+    }
+
+    if (lastError) {
+      throw lastError;
+    }
+
+    return null;
+  }
 
   async function fetchConversation(showLoading = true) {
     if (!chatId) return;
@@ -231,34 +395,7 @@ export default function ChatPage() {
     setError(null);
 
     try {
-        // Use the canonical messages-by-contact endpoint.
-        // Try the exact path the frontend expects, with a leading-plus fallback for phone ids.
-        const idRaw = String(chatId || "");
-        const idWithPlus = idRaw.startsWith("+") ? idRaw : `+${idRaw}`;
-        let response = undefined as any;
-
-        try {
-          // Primary expected shape
-          response = await api.get(`/api/Messages/contact/${encodeURIComponent(idRaw)}`);
-        } catch (err: unknown) {
-          const status = (err as any)?.statusCode ?? (err as any)?.response?.status;
-          if (status === 404) {
-            // Try with leading plus if not found
-            try {
-              response = await api.get(`/api/Messages/contact/${encodeURIComponent(idWithPlus)}`);
-            } catch (err2: unknown) {
-              const status2 = (err2 as any)?.statusCode ?? (err2 as any)?.response?.status;
-              if (status2 === 404) {
-                throw new Error("No messages endpoint matched (404)");
-              }
-              throw err2;
-            }
-          } else {
-            throw err;
-          }
-        }
-
-        const data = response.data;
+        const data = await fetchConversationData(chatId);
 
       if (Array.isArray(data) || data) {
         // normalize server response to internal MessageVm shape
@@ -283,23 +420,23 @@ export default function ChatPage() {
       } else {
         if (showLoading) setMessages([]);
       }
+
+      return true;
     } catch (err: unknown) {
       console.error("Error fetching conversation:", err);
 
-      if (axios.isAxiosError(err) && err.response?.status === 403) {
+      const status = getErrorStatus(err);
+      const message = getErrorMessage(err);
+
+      if (status === 403) {
         setError("You don't have permission to view this conversation");
         setTimeout(() => router.push("/dashboard"), 3000);
-      } else if (axios.isAxiosError(err)) {
-        setError(
-          err.response?.data?.error ||
-            err.response?.data?.message ||
-            "Failed to load conversation"
-        );
       } else {
-        setError("Failed to load conversation");
+        setError(message || "Failed to load conversation");
       }
 
       if (showLoading) setMessages([]);
+      return false;
     } finally {
       if (showLoading) setInitialLoading(false);
       else setIsRefreshing(false);
@@ -317,9 +454,13 @@ export default function ChatPage() {
           batch.map((id) =>
             api
               .get(`/api/Messages/status`, { params: { messageId: id } })
-              .then((r) => ({ id, data: r.data }))
+              .then((r) => ({ id, data: r.data, retryAfterMs: 0 }))
               .catch((err) => {
-                if (err?.statusCode === 404 || err?.response?.status === 404) return { id, data: null };
+                const status = getErrorStatus(err);
+                if (status === 404) return { id, data: null, retryAfterMs: 0 };
+                if (status === 429 || status === 502 || status === 503) {
+                  return { id, data: null, retryAfterMs: 60_000 };
+                }
                 throw err;
               })
           )
@@ -330,6 +471,12 @@ export default function ChatPage() {
           for (const res of results) {
             if (res.status === "fulfilled") {
               const id = res.value.id;
+              if (res.value.retryAfterMs > 0) {
+                statusRetryAtRef.current[id] = Date.now() + res.value.retryAfterMs;
+                continue;
+              }
+
+              delete statusRetryAtRef.current[id];
               const payload: StatusPayload = res.value.data;
               // Mark IDs even when endpoint returns null/404 so we do not refetch forever.
               if (!payload) {
@@ -351,6 +498,34 @@ export default function ChatPage() {
     }
   };
 
+  // Scroll refs for auto-scrolling to the latest message
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const conversationRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    bottomRef.current?.scrollIntoView({ behavior, block: 'end' });
+  };
+
+  // Scroll to bottom instantly when switching chats or when initial load completes
+  useEffect(() => {
+    if (!initialLoading && messages && messages.length > 0) {
+      scrollToBottom('instant');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId, initialLoading]);
+
+  // Smart-scroll on new messages: only if user is already near the bottom
+  const msgCount = messages ? messages.length : 0;
+  useEffect(() => {
+    if (initialLoading || !messages || messages.length === 0) return;
+    const el = conversationRef.current;
+    const isNearBottom = el
+      ? el.scrollHeight - el.scrollTop - el.clientHeight < 200
+      : true;
+    if (isNearBottom) scrollToBottom('smooth');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [msgCount]);
+
   // Reset all state immediately when chatId changes so the UI is clean before fetch
   const prevChatIdRef = useRef(chatId);
   useEffect(() => {
@@ -369,6 +544,8 @@ export default function ChatPage() {
   useEffect(() => {
     if (!chatId) return;
     fetchConversation(true);
+    // Tell the chat list to clear the unread badge for this contact immediately.
+    window.dispatchEvent(new CustomEvent('chatOpened', { detail: { contactId: chatId } }));
 
     const interval = setInterval(() => fetchConversation(false), 15000);
     return () => clearInterval(interval);
@@ -376,12 +553,14 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (!messages || messages.length === 0) return;
+    const now = Date.now();
     const toCheck = messages
       .filter(
         (m) =>
           !m.isIncoming &&
           m.messageId &&
-          !String(m.messageId).startsWith("temp-")
+          !String(m.messageId).startsWith("temp-") &&
+          (statusRetryAtRef.current[String(m.messageId)] ?? 0) <= now
       )
       .map((m) => String(m.messageId))
       .filter((id) => !(id in statusMap));
@@ -400,30 +579,33 @@ export default function ChatPage() {
       if (!hasFile && !hasText) return false;
 
       const phoneNumber = digitsOnly(chatId || "");
-      const contactIdVariants = buildContactIdVariants(chatId);
-      const recipientDigits = digitsOnly(chatId || "");
-      const recipientPlus = recipientDigits ? `+${recipientDigits}` : "";
+      const latestIncomingContextMessageId =
+        [...(messages ?? [])]
+          .reverse()
+          .map((m) => (m.isIncoming ? getContextIdFromMessage(m) : null))
+          .find((id): id is string => Boolean(id)) ?? null;
+      const resolvedContextMessageId =
+        quote?.messageId ?? latestIncomingContextMessageId;
+
+      if (!resolvedContextMessageId) {
+        setError("Cannot send reply: no incoming message context found yet.");
+        return false;
+      }
 
       let messageText = hasText ? inputText : "";
       const payloadBase: SendMessagePayload = {
+        contactId: phoneNumber,
+        messageText,
+        contextMessageId: resolvedContextMessageId,
         ContactId: phoneNumber,
         MessageText: messageText,
+        ContextMessageId: resolvedContextMessageId,
       };
 
-      if (quote?.messageId) {
-        payloadBase.ContextMessageId = quote.messageId;
-      } else if (quote?.body) {
+      if (!quote?.messageId && quote?.body) {
         messageText = hasText ? `> ${quote.body}\n\n${inputText}` : "";
-      }
-
-      payloadBase.MessageText = messageText;
-      payloadBase.contactId = phoneNumber;
-      payloadBase.text = messageText;
-      payloadBase.Body = messageText;
-      payloadBase.body = messageText;
-      payloadBase.message = messageText;
-      if (payloadBase.ContextMessageId) {
-        payloadBase.contextMessageId = payloadBase.ContextMessageId;
+        payloadBase.messageText = messageText;
+        payloadBase.MessageText = messageText;
       }
 
       let mediaMeta: {
@@ -499,27 +681,24 @@ export default function ChatPage() {
 
       const payload: SendMessagePayload = { ...payloadBase };
       if (mediaMeta) {
-        payload.MediaId = mediaMeta.mediaId;
         payload.mediaId = mediaMeta.mediaId;
-        payload.MediaType = mediaMeta.mediaType;
+        payload.MediaId = mediaMeta.mediaId;
         payload.mediaType = mediaMeta.mediaType;
-        payload.MediaFileName = mediaMeta.mediaFileName;
+        payload.MediaType = mediaMeta.mediaType;
         payload.mediaFileName = mediaMeta.mediaFileName;
-        payload.FileName = mediaMeta.fileName;
+        payload.MediaFileName = mediaMeta.mediaFileName;
         payload.fileName = mediaMeta.fileName;
-        payload.MediaLocalPath = mediaMeta.mediaPath;
+        payload.FileName = mediaMeta.fileName;
         payload.mediaLocalPath = mediaMeta.mediaPath;
+        payload.MediaLocalPath = mediaMeta.mediaPath;
         if (mediaMeta.mediaUrl) {
-          payload.MediaUrl = mediaMeta.mediaUrl;
           payload.mediaUrl = mediaMeta.mediaUrl;
+          payload.MediaUrl = mediaMeta.mediaUrl;
         }
 
         if (!hasText) {
+          payload.messageText = "";
           payload.MessageText = "";
-          payload.text = "";
-          payload.Body = "";
-          payload.body = "";
-          payload.message = "";
         }
       }
 
@@ -565,16 +744,12 @@ export default function ChatPage() {
         }
       }
 
-      const senderPhone =
-        user && "phoneNumber" in user && typeof user.phoneNumber === "string"
-          ? user.phoneNumber.trim()
-          : "";
-      const senderDigits = digitsOnly(senderPhone);
-      const senderPlus = senderDigits ? `+${senderDigits}` : senderPhone;
-        
       const optimisticMessage: MessageVm = {
         id: 0,
         messageId: tempId,
+        isOutgoing: true,
+        sourcePhoneNumberId: null,
+        displayPhoneNumber: null,
         messageType: mediaMeta ? mediaMeta.mediaType : "text",
         mediaId: mediaMeta?.mediaId ?? null,
         mediaFileName: mediaMeta?.mediaFileName ?? null,
@@ -586,7 +761,7 @@ export default function ChatPage() {
         mediaPath: mediaMeta?.mediaPath ?? null,
         messageDateTime: new Date(),
         isIncoming: false,
-        contextMessageId: quote?.messageId || null,
+        contextMessageId: resolvedContextMessageId,
         sentBy: userId,
         senderName: userName,
       };
@@ -594,66 +769,46 @@ export default function ChatPage() {
         prev ? [...prev, optimisticMessage] : [optimisticMessage]
       );
 
-      let response = null as Awaited<ReturnType<typeof api.post>> | null;
-      let lastError: unknown = null;
-      const endpoints = ["/api/Messages/send", "/api/Messages"];
-
-      for (const endpoint of endpoints) {
-        for (const contactIdVariant of contactIdVariants) {
-          try {
-            const attemptPayload: SendMessagePayload = {
-              ...payload,
-              ContactId: contactIdVariant,
-              contactId: contactIdVariant,
-              To: recipientPlus || contactIdVariant,
-              to: recipientPlus || contactIdVariant,
-              Recipient: recipientPlus || contactIdVariant,
-              recipient: recipientPlus || contactIdVariant,
-              ContactWaId: recipientPlus || contactIdVariant,
-              contactWaId: recipientPlus || contactIdVariant,
-              PhoneNumber: recipientDigits || contactIdVariant,
-              phoneNumber: recipientDigits || contactIdVariant,
-              From: senderPlus,
-              from: senderPlus,
-            };
-
-            response = await api.post(endpoint, attemptPayload);
-            break;
-          } catch (err) {
-            lastError = err;
-
-            const status = getErrorStatus(err);
-            const apiMessage = getErrorMessage(err);
-
-            if (!status) {
-              throw err;
-            }
-
-            const shouldRetry =
-              (status === 400 || status === 401 || status === 404) &&
-              /send failed|invalid|not found|unauthorized/i.test(apiMessage);
-
-            if (!shouldRetry) {
-              throw err;
-            }
-          }
-        }
-
-        if (response) {
-          break;
-        }
-      }
-
-      if (!response && lastError) {
-        throw lastError;
-      }
+      const response = await api.post("/api/Messages/send", payload);
 
       if ((response as { status?: number } | null)?.status !== undefined && (response as { status: number }).status >= 200 && (response as { status: number }).status < 300) {
         setQuote(null);
-        setMessages(
-          (prev) => prev?.filter((m) => m.messageId !== tempId) || null
-        );
-        await fetchConversation(false);
+
+        const responseData = (response as { data?: unknown } | null)?.data;
+        const sendFailureReason = getSendFailureReason(responseData);
+        if (sendFailureReason) {
+          throw new Error(sendFailureReason);
+        }
+
+        const normalizedResponse = responseData
+          ? (await import("@/lib/chatAdapter")).default.normalizeMessages(
+              Array.isArray(responseData) ? responseData : [responseData],
+              chatId
+            )
+          : [];
+
+        if (normalizedResponse.length > 0) {
+          setMessages((prev) => {
+            const withoutTemp = prev?.filter((m) => m.messageId !== tempId) || [];
+            return dedupeAndSort([
+              ...withoutTemp,
+              ...(normalizedResponse as MessageVm[]).map((message) => ({
+                ...message,
+                isIncoming: false,
+              })),
+            ]);
+          });
+          void fetchConversation(false);
+        } else {
+          const refreshed = await fetchConversation(false);
+          if (refreshed) {
+            setMessages(
+              (prev) => prev?.filter((m) => m.messageId !== tempId) || null
+            );
+          }
+        }
+
+        window.dispatchEvent(new CustomEvent('chatMessageSent', { detail: { contactId: chatId } }));
         return true;
       } else {
         console.error("Send message returned non-success status", response);
@@ -670,8 +825,11 @@ export default function ChatPage() {
       );
       if (axios.isAxiosError(error)) {
         const response = error.response;
+        const parsedReason = getSendFailureReason(response?.data);
         if (response?.status === 403) {
           setError("You don't have permission to send message to this contact");
+        } else if (parsedReason) {
+          setError(parsedReason);
         } else {
           setError(
             response?.data?.error ||
@@ -750,6 +908,30 @@ export default function ChatPage() {
     contactInfo?.name && !contactNameLooksLikePhone(contactInfo.name, chatId)
   );
 
+  const latestIncomingMessage =
+    [...(messages ?? [])]
+      .reverse()
+      .find(
+        (m) =>
+          m.isIncoming && Boolean(getContextIdFromMessage(m))
+      ) ?? null;
+
+  const resolvedContextMessageId =
+    quote?.messageId ?? getContextIdFromMessage(latestIncomingMessage) ?? null;
+
+  const resolvedContextMessage = resolvedContextMessageId
+    ? (messages ?? []).find(
+        (m) =>
+          (m.messageId && m.messageId === resolvedContextMessageId) ||
+          String(m.id) === String(resolvedContextMessageId)
+      ) ?? null
+    : null;
+
+  const replySourceNumber =
+    resolvedContextMessage?.displayPhoneNumber ||
+    resolvedContextMessage?.sourcePhoneNumberId ||
+    null;
+
   return (
     <div className="d-lg-flex">
       <div className="w-100 overflow-hidden position-relative">
@@ -825,7 +1007,7 @@ export default function ChatPage() {
             </div>
           </div>
         </div>
-        <div className="chat-conversation p-3 p-lg-4">
+        <div ref={conversationRef} className="chat-conversation p-3 p-lg-4">
           {initialLoading ? (
             <div className="flex justify-center items-center h-full">
               Loading messages...
@@ -835,6 +1017,7 @@ export default function ChatPage() {
               {error}
             </div>
           ) : messages && messages.length > 0 ? (
+            <>
             <ul className="list-unstyled mb-0">
               {messages.map((m) => {
                 const uniqueKey = buildMsgKey(m);
@@ -867,6 +1050,9 @@ export default function ChatPage() {
                       message={{
                         id: uniqueKey,
                         messageId: m.messageId ?? null,
+                        isOutgoing: m.isOutgoing ?? !m.isIncoming,
+                        sourcePhoneNumberId: m.sourcePhoneNumberId ?? null,
+                        displayPhoneNumber: m.displayPhoneNumber ?? null,
                         body: m.messageText ?? "",
                         timestamp: new Date(m.messageDateTime),
                         status: uiStatus,
@@ -882,10 +1068,11 @@ export default function ChatPage() {
                       }}
                       quotedText={quotedMessage?.messageText ?? null}
                       onReply={() => {
+                        const replyContextId = getContextIdFromMessage(m);
                         setQuote({
                           id: buildMsgKey(m),
                           body: m.messageText ?? "",
-                          messageId: m.messageId ?? null,
+                          messageId: replyContextId,
                         });
                         setContextMenu(null);
                       }}
@@ -894,6 +1081,8 @@ export default function ChatPage() {
                 );
               })}
             </ul>
+            <div ref={bottomRef} />
+            </>
           ) : (
             <div className="flex justify-center items-center h-full text-gray-500">
               No messages yet. Start a conversation with{" "}
@@ -920,6 +1109,18 @@ export default function ChatPage() {
             </div>
           )}
 
+          <div className="mb-2">
+            {replySourceNumber ? (
+              <span className="badge bg-info-subtle text-info-emphasis" style={{ fontSize: 12, fontWeight: 500 }}>
+                Reply will be sent from {replySourceNumber}
+              </span>
+            ) : (
+              <span className="badge bg-warning-subtle text-warning-emphasis" style={{ fontSize: 12, fontWeight: 500 }}>
+                No incoming context selected yet
+              </span>
+            )}
+          </div>
+
           <MessageInput onSend={handleSendMessage} />
         </div>
       </div>
@@ -932,10 +1133,11 @@ export default function ChatPage() {
           <button
             onClick={() => {
               const msg = contextMenu.message;
+              const replyContextId = getContextIdFromMessage(msg);
               setQuote({
                 id: buildMsgKey(msg),
                 body: msg.messageText ?? "",
-                messageId: msg.messageId ?? null,
+                messageId: replyContextId,
               });
               setContextMenu(null);
             }}

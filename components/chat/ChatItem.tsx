@@ -4,7 +4,7 @@
 // ChatItem component to display individual chat in the list
 
 import React from 'react';
-import { Check, CheckCheck } from 'lucide-react';
+import { ArrowDownLeft, Check, CheckCheck } from 'lucide-react';
 import type { Conversation } from './ChatList';
 import Avatar from '../ui/Avatar';
 import StableImage from './StableImage';
@@ -74,21 +74,18 @@ function ChatItemInner({ chat }: { chat: Conversation }) {
   const lastAt = chat?.lastMessageTime ?? null;
   const unread = Number(chat?.unreadCount ?? 0);
 
-  // Determine if the last message was outgoing (sent by us)
-  // Priority: explicit fields from API, fallback to heuristic (unreadCount === 0 means we likely sent last message)
-  const isLastMessageOutgoing = 
+  const isLastMessageOutgoing =
     chat?.lastMessageDirection === 'outgoing' ||
     chat?.isLastMessageIncoming === false ||
     chat?.lastMessageIsIncoming === false ||
-    (chat?.lastMessageDirection === undefined && 
-     chat?.isLastMessageIncoming === undefined && 
-     chat?.lastMessageIsIncoming === undefined &&
-     unread === 0);
+    (chat?.lastMessageDirection === undefined &&
+      chat?.isLastMessageIncoming === undefined &&
+      chat?.lastMessageIsIncoming === undefined &&
+      unread === 0);
 
-  // Get message status. If missing and the last message was outgoing,
-  // treat it as 'sent' (single tick) until the backend reports delivery.
   let lastMessageStatus = (chat?.lastMessageStatus ?? undefined) as string | undefined;
   if (!lastMessageStatus && isLastMessageOutgoing) lastMessageStatus = 'sent';
+  const normalizedStatus = String(lastMessageStatus ?? '').toLowerCase();
 
   // Type guard to check for avatar fields
   const hasContactAvatarUrl = (c: Conversation): c is ConversationWithAvatar =>
@@ -113,18 +110,19 @@ function ChatItemInner({ chat }: { chat: Conversation }) {
       <div className="flex-grow-1 overflow-hidden">
         <h5 className="text-truncate font-size-15 mb-1">{name}</h5>
         <p className="chat-user-message text-truncate mb-0 d-flex align-items-center">
-          {isLastMessageOutgoing && (
-            <span className="me-1 d-inline-flex align-items-center" aria-hidden>
-              {(lastMessageStatus === 'read' || String(lastMessageStatus).toLowerCase() === 'seen') ? (
+          <span className="me-1 d-inline-flex align-items-center" aria-hidden>
+            {isLastMessageOutgoing ? (
+              (normalizedStatus === 'read' || normalizedStatus === 'seen' || normalizedStatus === 'received') ? (
                 <CheckCheck size={14} style={{ color: '#3b82f6' }} />
-              ) : (String(lastMessageStatus).toLowerCase() === 'delivered') ? (
+              ) : (normalizedStatus === 'delivered') ? (
                 <CheckCheck size={14} style={{ color: '#9ca3af' }} />
               ) : (
-                // default and 'sent' show a single grey tick
                 <Check size={14} style={{ color: '#9ca3af' }} />
-              )}
-            </span>
-          )}
+              )
+            ) : (
+              <ArrowDownLeft size={13} style={{ color: '#9ca3af' }} />
+            )}
+          </span>
           {/* If there is an image/media preview, show a small thumbnail */}
           {((chat as ConversationWithMedia).lastMediaPath) ? (
             (() => {

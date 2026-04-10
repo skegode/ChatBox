@@ -31,7 +31,7 @@ body[data-theme='dark'] {
 }
 
 /* ── Global ── */
-body {
+body:not(.landing-page) {
   font-family: 'Plus Jakarta Sans', 'Segoe UI', system-ui, -apple-system, sans-serif !important;
   background: var(--wa-bg) !important;
   color: var(--wa-ink-900) !important;

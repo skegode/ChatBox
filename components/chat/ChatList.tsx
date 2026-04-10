@@ -41,6 +41,9 @@ export default function ChatList() {
   const previewRetryAtRef = useRef<Record<string, number>>({});
   const router = useRouter();
   const pathname = usePathname();
+  // Keep a ref so the stale useCallback closure always reads the current pathname.
+  const pathnameRef = useRef(pathname);
+  useEffect(() => { pathnameRef.current = pathname; }, [pathname]);
   const { user, checkPolicy, isLoading } = useAuth();
 
 
@@ -61,10 +64,19 @@ export default function ChatList() {
       // Merge with previous chats to preserve any last-message previews and media
       setChats((prev) => {
         const prevArr = prev || [];
+        // Detect the currently open chat from the URL so we can keep its badge at 0.
+        const openDigits = (() => {
+          const seg = pathnameRef.current?.split('/dashboard/')?.[1]?.split('/')?.[0];
+          return seg ? decodeURIComponent(seg).replace(/\D/g, '') : '';
+        })();
         return (normalized as Conversation[]).map((n) => {
           const p = prevArr.find((x) => normalizeContactId(x.contactId) === normalizeContactId(n.contactId));
+          const contactDigits = normalizeContactId(n.contactId);
+          const isCurrentlyOpen = openDigits !== '' && contactDigits === openDigits;
           return {
             ...n,
+            // If this is the chat the agent currently has open, always show 0 unread.
+            unreadCount: isCurrentlyOpen ? 0 : n.unreadCount,
             lastMessageText: n.lastMessageText ?? p?.lastMessageText ?? undefined,
             lastMessageTime: n.lastMessageTime ?? p?.lastMessageTime ?? undefined,
             lastMediaPath: n.lastMediaPath ?? (p as any)?.lastMediaPath ?? undefined,
@@ -78,13 +90,14 @@ export default function ChatList() {
       // For chats that don't include a last message preview, fetch lightweight previews in background
       (async () => {
           try {
+          if (!showLoading) return;
           // Run background preview fetches on the client regardless of a local token
           // so the sidebar can display last-message previews for chats even when
           // the client hasn't stored a token locally (for example when auth is
           // cookie-based or managed server-side).
           if (typeof window === 'undefined') return; // server-side safety
           const missingAll = (normalized as Conversation[])
-            .filter(c => !(c.lastMessageText) && c.contactId)
+            .filter(c => (!(c.lastMessageText) || !c.lastMessageStatus) && c.contactId)
             .map(c => c.contactId);
           if (missingAll.length === 0) return;
 
@@ -165,10 +178,32 @@ export default function ChatList() {
                     lastMediaPath: last.mediaPath ?? null,
                     lastMessageType: last.messageType ?? null,
                     lastMessageDirection: last.isIncoming ? 'incoming' : 'outgoing',
-                    lastMessageStatus: null, // individual messages may not carry status
+                    lastMessageStatus: null,
                   };
                   previewsCache[contactId] = entry;
                   previewsCache[normalizeContactId(contactId)] = entry;
+
+                  // Match conversation view status source by checking message status endpoint
+                  // for the latest message in the thread.
+                  const messageId = typeof last.messageId === 'string' ? last.messageId : null;
+                  if (messageId && !messageId.startsWith('temp-')) {
+                    try {
+                      const statusResp = await api.get('/api/Messages/status', { params: { messageId } });
+                      const payload = statusResp?.data as { status?: string; delivered?: boolean } | null;
+                      const normalized = String(payload?.status ?? '').toLowerCase();
+                      if (normalized === 'read' || normalized === 'seen' || normalized === 'received') {
+                        entry.lastMessageStatus = 'read';
+                      } else if (normalized === 'delivered' || payload?.delivered === true) {
+                        entry.lastMessageStatus = 'delivered';
+                      } else {
+                        entry.lastMessageStatus = 'sent';
+                      }
+                    } catch (_) {
+                      // Fallback keeps ticks deterministic when status endpoint fails.
+                      entry.lastMessageStatus = 'sent';
+                    }
+                  }
+
                   // Success: stop retrying this contact.
                   previewRetryAtRef.current[key] = Number.MAX_SAFE_INTEGER;
                 } else {
@@ -189,9 +224,15 @@ export default function ChatList() {
                 const p = previewsCache[key] || previewsCache[ch.contactId];
                 if (!p) return ch;
                 const rawStatus = ch.lastMessageStatus ?? p.lastMessageStatus ?? ch.lastMessageStatus;
-                const safeStatus = (rawStatus === 'sent' || rawStatus === 'delivered' || rawStatus === 'read' || rawStatus == null)
-                  ? rawStatus as 'sent' | 'delivered' | 'read' | null | undefined
-                  : undefined;
+                const normalizedStatus = String(rawStatus ?? '').toLowerCase();
+                const safeStatus =
+                  normalizedStatus === 'read' || normalizedStatus === 'seen' || normalizedStatus === 'received'
+                    ? 'read'
+                    : normalizedStatus === 'delivered'
+                    ? 'delivered'
+                    : normalizedStatus === 'sent' || !normalizedStatus
+                    ? 'sent'
+                    : undefined;
                 return {
                   ...ch,
                   lastMessageText: ch.lastMessageText ?? p.lastMessageText ?? ch.lastMessageText,
@@ -255,10 +296,28 @@ export default function ChatList() {
     startPolling();
     document.addEventListener('visibilitychange', handleVisibility);
 
+    // Immediately re-sort when a message is sent from the chat window
+    const handleChatSent = () => silentRefresh();
+    window.addEventListener('chatMessageSent', handleChatSent);
+
+    // Zero the unread badge immediately when the user opens a chat
+    const handleChatOpened = (e: Event) => {
+      const contactId = (e as CustomEvent<{ contactId: string }>).detail?.contactId;
+      if (!contactId) return;
+      const digits = String(contactId).replace(/\D/g, '');
+      setChats(prev => (prev || []).map(ch => {
+        const chDigits = String(ch.contactId ?? '').replace(/\D/g, '');
+        return chDigits === digits ? { ...ch, unreadCount: 0 } : ch;
+      }));
+    };
+    window.addEventListener('chatOpened', handleChatOpened);
+
     return () => {
       running = false;
       stopPolling();
       document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('chatMessageSent', handleChatSent);
+      window.removeEventListener('chatOpened', handleChatOpened);
     };
   }, [fetchConversations, silentRefresh]);
 
@@ -272,15 +331,24 @@ export default function ChatList() {
     fetchConversations(true);
   };
 
-  const filteredChats = useMemo(() => {
-    if (!query || query.trim() === "") return chats;
-    const q = query.trim().toLowerCase();
-    return chats.filter((c) => {
-      const name = (c.contactName || "").toLowerCase();
-      const id = (c.contactId || "").toLowerCase();
-      const last = (c.lastMessageText || "").toLowerCase();
-      return name.includes(q) || id.includes(q) || last.includes(q);
+  const sortByLatest = (arr: Conversation[]) =>
+    [...arr].sort((a, b) => {
+      const tA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
+      const tB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
+      return tB - tA;
     });
+
+  const filteredChats = useMemo(() => {
+    const base = (!query || query.trim() === "")
+      ? chats
+      : chats.filter((c) => {
+          const name = (c.contactName || "").toLowerCase();
+          const id = (c.contactId || "").toLowerCase();
+          const last = (c.lastMessageText || "").toLowerCase();
+          const q = query.trim().toLowerCase();
+          return name.includes(q) || id.includes(q) || last.includes(q);
+        });
+    return sortByLatest(base);
   }, [chats, query]);
 
   // Normalize contact IDs for stable deduping/keys (strip non-digits and leading +)

@@ -21,6 +21,9 @@ if (typeof document !== 'undefined' && !document.getElementById(CHAT_IMAGE_STYLE
 type Message = {
   id: string;
   messageId?: string | null;
+  isOutgoing?: boolean;
+  sourcePhoneNumberId?: string | null;
+  displayPhoneNumber?: string | null;
   body: string;
   timestamp: Date;
   status: "sent" | "delivered" | "read";
@@ -46,7 +49,9 @@ export default function MessageBubble({
   quotedText,
   onReply,
 }: MessageBubbleProps) {
-  const isOutgoing = message.direction === "outgoing";
+  const isOutgoing = typeof message.isOutgoing === "boolean"
+    ? message.isOutgoing
+    : message.direction === "outgoing";
 
   const safeTimestamp =
     message.timestamp instanceof Date && !isNaN(message.timestamp.getTime())
@@ -579,6 +584,16 @@ export default function MessageBubble({
             {isOutgoing && message.senderName && (
               <p className="text-xs text-muted mt-1 mb-0">
                 Sent by {message.senderName}
+              </p>
+            )}
+            {!isOutgoing && message.displayPhoneNumber && (
+              <p className="mt-1 mb-0">
+                <span
+                  className="badge bg-light text-muted"
+                  style={{ fontSize: 11, fontWeight: 500 }}
+                >
+                  received on {message.displayPhoneNumber}
+                </span>
               </p>
             )}
           </div>

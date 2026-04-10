@@ -37,6 +37,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" async></script>
         {/* WA theme — loaded LAST so it wins over Bootstrap + app.min.css */}
         <link href="/css/custom/wa-theme.css" rel="stylesheet" type="text/css" />
+        {/* Landing page styles */}
+        <link href="/css/custom/landing.css" rel="stylesheet" type="text/css" />
       </head>
       <body>
         <ThemeProvider>
