@@ -159,83 +159,81 @@ function normalizeOutboundMediaType(v?: string | null, file?: File | null): Chat
 }
 
 function getSendFailureReason(payload: unknown): string | null {
-  const readString = (obj: unknown, key: string): string => {
+  const readStr = (obj: unknown, key: string): string => {
     if (!obj || typeof obj !== "object") return "";
-    const value = (obj as Record<string, unknown>)[key];
-    return typeof value === "string" ? value.trim() : "";
+    const v = (obj as Record<string, unknown>)[key];
+    return typeof v === "string" ? v.trim() : "";
   };
 
-  const parseNestedDetails = (details: string): string => {
-    const trimmed = details.trim();
-    if (!trimmed) return "";
-    try {
-      const parsed = JSON.parse(trimmed) as unknown;
-      const nestedError = readString(parsed, "error");
-      if (nestedError) return nestedError;
-      const nestedMessage = readString(parsed, "message");
-      if (nestedMessage) return nestedMessage;
-      if (parsed && typeof parsed === "object") {
-        const errObj = (parsed as Record<string, unknown>)["error"];
-        const errMessage = readString(errObj, "message");
-        if (errMessage) return errMessage;
-      }
-    } catch {
-      // ignore parse failure and use raw details string
-    }
-    return trimmed;
-  };
+  const readObj = (obj: unknown, key: string): unknown =>
+    obj && typeof obj === "object"
+      ? (obj as Record<string, unknown>)[key]
+      : undefined;
 
-  if (typeof payload === "string") {
-    const txt = payload.trim();
-    if (/whatsapp send failed|oauth|invalid access token|unauthorized|forbidden/i.test(txt)) {
-      return txt;
-    }
+  if (!payload || typeof payload !== "object") {
+    if (typeof payload === "string" &&
+        /whatsapp send failed|oauth|invalid access token|unauthorized|forbidden/i.test(payload))
+      return payload.trim();
     return null;
   }
 
-  if (!payload || typeof payload !== "object") return null;
+  // ── New backend error passthrough shape ─────────────────────────────────
+  // { error: "upstream_error", message: "...", details: { provider, code, subcode,
+  //   providerMessage, fbtrace_id, request: { phone_number_id, to, context } } }
+  const details = readObj(payload, "details");
+  if (details && typeof details === "object") {
+    const code = (details as Record<string, unknown>)["code"];
+    const subcode = (details as Record<string, unknown>)["subcode"];
+    const providerMsg = readStr(details, "providerMessage");
+    const fbtrace = readStr(details, "fbtrace_id");
 
-  const errorText = readString(payload, "error");
-  const messageText = readString(payload, "message");
-  const detailsText = readString(payload, "details");
-  const errorsValue = (payload as Record<string, unknown>)["errors"];
+    // 24-hour customer care window expired (code 131047 / subcode 2494010)
+    if (code === 131047 || subcode === 2494010) {
+      return "This contact's 24-hour messaging window has closed. " +
+             "You can only send pre-approved template messages until they message you again.";
+    }
 
+    if (providerMsg) {
+      const parts: string[] = [providerMsg];
+      if (code) parts.push(`(code ${code}${subcode ? `/${subcode}` : ""})`);
+      if (fbtrace) parts.push(`[trace: ${fbtrace}]`);
+      return parts.join(" ");
+    }
+  }
+
+  const errorText = readStr(payload, "error");
+  const messageText = readStr(payload, "message");
+
+  const errorsValue = readObj(payload, "errors");
   if (errorsValue && typeof errorsValue === "object") {
     const flattened = Object.entries(errorsValue as Record<string, unknown>)
-      .map(([field, value]) => {
-        if (Array.isArray(value)) {
-          return `${field}: ${value.map((v) => String(v)).join(", ")}`;
-        }
-        if (typeof value === "string") {
-          return `${field}: ${value}`;
-        }
-        return "";
-      })
+      .map(([field, value]) =>
+        Array.isArray(value)
+          ? `${field}: ${value.map(String).join(", ")}`
+          : typeof value === "string"
+          ? `${field}: ${value}`
+          : ""
+      )
       .filter(Boolean)
       .join(" | ");
     if (flattened) return flattened;
   }
 
-  if (errorText) {
-    const detailReason = parseNestedDetails(detailsText);
-    return detailReason ? `${errorText}: ${detailReason}` : errorText;
-  }
+  if (errorText && errorText !== "upstream_error") return errorText;
 
-  const successValue = (payload as Record<string, unknown>)["success"];
-  const okValue = (payload as Record<string, unknown>)["ok"];
+  const successValue = readObj(payload, "success");
+  const okValue = readObj(payload, "ok");
   const statusValue = String((payload as Record<string, unknown>)["status"] ?? "").toLowerCase();
   const explicitlyFailed =
-    successValue === false ||
-    okValue === false ||
-    statusValue === "failed" ||
-    statusValue === "error";
+    successValue === false || okValue === false ||
+    statusValue === "failed" || statusValue === "error";
 
   if (explicitlyFailed) {
     if (messageText) return messageText;
-    if (detailsText) return parseNestedDetails(detailsText) || detailsText;
     return "Message send was rejected by upstream";
   }
 
+  if (messageText) return messageText;
   return null;
 }
 
@@ -615,43 +613,51 @@ export default function ChatPage() {
       const hasText = inputText.trim().length > 0;
       if (!hasFile && !hasText) return false;
 
+      // Backend requires digits-only contactId (strips + and routes on normalized digits).
       const phoneNumber = digitsOnly(chatId || "");
-      const phoneNumberE164 = phoneNumber ? `+${phoneNumber}` : "";
-      const latestIncomingContextMessageId =
-        [...(messages ?? [])]
-          .reverse()
-          .map((m) => (m.isIncoming ? getContextIdFromMessage(m) : null))
-          .find((id): id is string => Boolean(id)) ?? null;
+
+      // Find the best inbound message to use as context.
+      // Priority: explicitly quoted message > most recent inbound with a real wamid.
+      const reversedMessages = [...(messages ?? [])].reverse();
+      const latestIncomingWithWamid = reversedMessages.find(
+        (m) => m.isIncoming && Boolean(getContextIdFromMessage(m))
+      ) ?? null;
+
+      // contextMessageId must be a real inbound wamid — never synthetic.
       const resolvedContextMessageId =
-        quote?.messageId ?? latestIncomingContextMessageId ?? null;
+        (quote?.messageId && getContextIdFromMessage({ ...latestIncomingWithWamid, messageId: quote.messageId, id: 0, messageType: 'text', contactWaId: '', messageDateTime: new Date(), isIncoming: true }))
+        ?? getContextIdFromMessage(latestIncomingWithWamid)
+        ?? null;
+
+      // sourcePhoneNumberId from the context inbound message — backend uses this to pick sender.
       const contextSourcePhoneNumberId =
-        [...(messages ?? [])]
-          .reverse()
-          .find(
-            (m) =>
-              m.isIncoming &&
-              Boolean(getContextIdFromMessage(m)) &&
-              Boolean(m.sourcePhoneNumberId)
-          )?.sourcePhoneNumberId ?? "";
+        latestIncomingWithWamid?.sourcePhoneNumberId ?? "";
       const contextDisplayPhoneNumber =
-        [...(messages ?? [])]
-          .reverse()
-          .find(
-            (m) =>
-              m.isIncoming &&
-              Boolean(getContextIdFromMessage(m)) &&
-              Boolean(m.displayPhoneNumber)
-          )?.displayPhoneNumber ?? "";
+        latestIncomingWithWamid?.displayPhoneNumber ?? "";
 
       let messageText = hasText ? inputText : "";
       const payloadBase: SendMessagePayload = {
+        // digits-only — backend strips + internally
         contactId: phoneNumber,
+        ContactId: phoneNumber,
+        to: phoneNumber,
+        To: phoneNumber,
+        recipient: phoneNumber,
+        Recipient: phoneNumber,
         messageText,
-        ...(resolvedContextMessageId ? { contextMessageId: resolvedContextMessageId, ContextMessageId: resolvedContextMessageId } : {}),
-        to: phoneNumberE164 || phoneNumber,
+        MessageText: messageText,
         text: messageText,
+        Text: messageText,
         body: messageText,
-        recipient: phoneNumberE164 || phoneNumber,
+        Body: messageText,
+        // real inbound wamid for sender routing
+        ...(resolvedContextMessageId
+          ? {
+              contextMessageId: resolvedContextMessageId,
+              ContextMessageId: resolvedContextMessageId,
+            }
+          : {}),
+        // sourcePhoneNumberId so backend can route to correct sender number
         ...(contextSourcePhoneNumberId
           ? {
               sourcePhoneNumberId: contextSourcePhoneNumberId,
@@ -665,13 +671,7 @@ export default function ChatPage() {
               from: contextDisplayPhoneNumber,
               From: contextDisplayPhoneNumber,
             }
-          : {}),
-        ContactId: phoneNumber,
-        MessageText: messageText,
-        To: phoneNumberE164 || phoneNumber,
-        Text: messageText,
-        Body: messageText,
-        Recipient: phoneNumberE164 || phoneNumber,
+          : {})
       };
 
       if (!quote?.messageId && quote?.body) {
@@ -1189,14 +1189,22 @@ export default function ChatPage() {
             </div>
           )}
 
-          <div className="mb-2">
+          <div className="mb-2 d-flex flex-wrap gap-2 align-items-center">
+            {latestIncomingMessage?.displayPhoneNumber && (
+              <span className="badge bg-light text-dark border" style={{ fontSize: 11, fontWeight: 500 }}>
+                <i className="ri-download-line me-1" />
+                Received on: <strong>{latestIncomingMessage.displayPhoneNumber}</strong>
+              </span>
+            )}
             {replySourceNumber ? (
-              <span className="badge bg-info-subtle text-info-emphasis" style={{ fontSize: 12, fontWeight: 500 }}>
-                Reply will be sent from {replySourceNumber}
+              <span className="badge bg-info-subtle text-info-emphasis" style={{ fontSize: 11, fontWeight: 500 }}>
+                <i className="ri-send-plane-line me-1" />
+                Will reply from: <strong>{replySourceNumber}</strong>
               </span>
             ) : (
-              <span className="badge bg-secondary-subtle text-secondary-emphasis" style={{ fontSize: 12, fontWeight: 500 }}>
-                No reply context selected. Message will be sent using the default sender number.
+              <span className="badge bg-secondary-subtle text-secondary-emphasis" style={{ fontSize: 11, fontWeight: 500 }}>
+                <i className="ri-send-plane-line me-1" />
+                Will use default sender number
               </span>
             )}
           </div>

@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 
-const DEFAULT_BACKEND = process.env.NEXT_PUBLIC_LOCAL_API || 'http://localhost:5265';
+// Use the configured backend URL (same source as the main proxy).
+// NEXT_PUBLIC_LOCAL_API is only set in local dev; in production BACKEND_URL or NEXT_PUBLIC_API_URL must be set.
+const DEFAULT_BACKEND =
+  process.env.BACKEND_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  process.env.NEXT_PUBLIC_LOCAL_API ||
+  'http://localhost:5265';
 
 function normalizeMediaVariants(raw: string): string[] {
   const variants = new Set<string>();
@@ -88,24 +94,23 @@ export async function GET(req: Request) {
 
     const mediaBase = process.env.NEXT_PUBLIC_MEDIA_BASE || process.env.NEXT_PUBLIC_API_URL || DEFAULT_BACKEND;
 
+    if (messageId) {
+      // Primary contract: GET /api/Messages/{messageId}/media (WhatsAppConversationsController:697)
+      const qid = encodeURIComponent(String(messageId).trim());
+      candidates.unshift(`${String(DEFAULT_BACKEND).replace(/\/+$/,'')}/api/Messages/${qid}/media`);
+      candidates.push(`${String(DEFAULT_BACKEND).replace(/\/+$/,'')}/api/Messages/media?path=${qid}`);
+      candidates.push(`${String(DEFAULT_BACKEND).replace(/\/+$/,'')}/api/Messages/media?messageId=${qid}`);
+      candidates.push(`${String(DEFAULT_BACKEND).replace(/\/+$/,'')}/api/Messages/media?wamid=${qid}`);
+      candidates.push(`${String(DEFAULT_BACKEND).replace(/\/+$/,'')}/api/messages/${qid}/media`);
+    }
+
     if (mediaId) {
+      // Secondary contract: GET /api/Messages/media?path={mediaIdOrFileRef} (WhatsAppConversationsController:802)
       const mid = encodeURIComponent(String(mediaId).trim());
+      candidates.push(`${String(DEFAULT_BACKEND).replace(/\/+$/,'')}/api/Messages/media?path=${mid}`);
       candidates.push(`${String(DEFAULT_BACKEND).replace(/\/+$/,'')}/api/Messages/media/${mid}`);
       candidates.push(`${String(DEFAULT_BACKEND).replace(/\/+$/,'')}/api/Messages/media?mediaId=${mid}`);
       candidates.push(`${String(DEFAULT_BACKEND).replace(/\/+$/,'')}/api/Messages/media?id=${mid}`);
-      candidates.push(`${String(DEFAULT_BACKEND).replace(/\/+$/,'')}/api/Messages/media?messageId=${mid}`);
-      candidates.push(`${String(DEFAULT_BACKEND).replace(/\/+$/,'')}/api/messages/media/${mid}`);
-      candidates.push(`${String(DEFAULT_BACKEND).replace(/\/+$/,'')}/Messages/media/${mid}`);
-    }
-
-    if (messageId) {
-      const qid = encodeURIComponent(String(messageId).trim());
-      candidates.push(`${String(DEFAULT_BACKEND).replace(/\/+$/,'')}/api/Messages/media?messageId=${qid}`);
-      candidates.push(`${String(DEFAULT_BACKEND).replace(/\/+$/,'')}/api/Messages/media?wamid=${qid}`);
-      candidates.push(`${String(DEFAULT_BACKEND).replace(/\/+$/,'')}/api/Messages/media?id=${qid}`);
-      candidates.push(`${String(DEFAULT_BACKEND).replace(/\/+$/,'')}/api/Messages/${qid}/media`);
-      candidates.push(`${String(DEFAULT_BACKEND).replace(/\/+$/,'')}/api/messages/${qid}/media`);
-      candidates.push(`${String(DEFAULT_BACKEND).replace(/\/+$/,'')}/api/Messages/${qid}`);
     }
     // Common backend endpoints and locations — prioritize typical public folders used by backend
     for (const v of variants) {
