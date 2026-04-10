@@ -1132,8 +1132,8 @@ export default function ChatPage() {
                 Reply will be sent from {replySourceNumber}
               </span>
             ) : (
-              <span className="badge bg-warning-subtle text-warning-emphasis" style={{ fontSize: 12, fontWeight: 500 }}>
-                No incoming context selected yet
+              <span className="badge bg-secondary-subtle text-secondary-emphasis" style={{ fontSize: 12, fontWeight: 500 }}>
+                No reply context selected. Message will be sent using the default sender number.
               </span>
             )}
           </div>
