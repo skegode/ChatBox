@@ -2,17 +2,27 @@ import { NextRequest } from 'next/server';
 
 // Generic proxy: forwards same-origin requests under /api/proxy/* to the upstream backend.
 // Preserves method, headers (except some hop-by-hop headers), body, and response status/content-type.
-const DEFAULT_BACKEND = process.env.NEXT_PUBLIC_API_URL || process.env.BACKEND_URL || 'https://app.servicesuitecloud.com/WhatsappApi';
+const CONFIGURED_BACKEND = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || '';
 
 async function proxyHandler(req: NextRequest) {
 	try {
+		if (!CONFIGURED_BACKEND) {
+			return new Response(
+				JSON.stringify({
+					error: 'Proxy misconfiguration',
+					message: 'BACKEND_URL is not configured for this deployment.',
+				}),
+				{ status: 500, headers: { 'Content-Type': 'application/json' } }
+			);
+		}
+
 		// Determine upstream path by removing the /api/proxy prefix
 		const url = new URL(req.url);
 		const rel = url.pathname.replace(/^\/api\/proxy/, '');
 		// If the client requested /api/proxy/Chats (no '/api' after proxy),
 		// most backend endpoints live under '/api/*' so ensure we preserve that.
 		const relWithApi = rel.startsWith('/api') ? rel : '/api' + rel;
-		const upstream = DEFAULT_BACKEND.replace(/\/+$/, '') + relWithApi + (url.search || '');
+		const upstream = CONFIGURED_BACKEND.replace(/\/+$/, '') + relWithApi + (url.search || '');
 
 		const init: RequestInit = {
 			method: req.method,
