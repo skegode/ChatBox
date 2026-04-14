@@ -18,19 +18,32 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const { login } = useAuth();
 
+  const normalizePhone = (value: string) => {
+    const cleaned = String(value || '').trim().replace(/[\s+-]/g, '');
+    const digits = cleaned.replace(/\D/g, '');
+    return digits;
+  };
+
   const sessionExpired = searchParams?.get('reason') === 'inactivity';
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!phone || !password) {
+    if (!phone.trim() || !password.trim()) {
       setError('Both fields are required');
       return;
     }
+
+    const normalizedPhone = normalizePhone(phone);
+    if (!/^\d{9,15}$/.test(normalizedPhone)) {
+      setError('Enter a valid phone number (e.g. 07XXXXXXXX or 2547XXXXXXXX).');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      await login(phone, password);
+      await login(normalizedPhone, password);
       router.push('/dashboard');
     } catch (err: unknown) {
       // Prefer ApiError-specific handling
@@ -43,8 +56,12 @@ function LoginForm() {
               ? 'You appear to be offline. Check your network connection.'
               : 'Server unreachable — try again later.';
           setError(`Network error: ${offlineMsg}`);
+        } else if (err.statusCode === 400) {
+          setError('PhoneNumber and Password are required.');
         } else if (err.statusCode === 401) {
-          setError('Login failed. Please check your credentials.');
+          setError('Incorrect phone or password');
+        } else if (err.statusCode === 502) {
+          setError('Service unavailable, try again');
         } else if (err.errorMessage) {
           setError(err.errorMessage);
         } else {

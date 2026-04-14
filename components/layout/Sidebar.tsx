@@ -190,12 +190,12 @@ export default function Sidebar() {
         <div className="navbar-brand-box">
           <a href="#" className="logo logo-dark">
             <span className="logo-sm">
-              <img src="images/logo.png" alt="" height={30} />
+              <img src="/images/logo.png" alt="" height={30} />
             </span>
           </a>
           <a href="#" className="logo logo-light">
             <span className="logo-sm">
-              <img src="images/logo.png" alt="" height={30} />
+              <img src="/images/logo.png" alt="" height={30} />
             </span>
           </a>
         </div>

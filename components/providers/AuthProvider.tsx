@@ -9,6 +9,39 @@ const INACTIVITY_TIMEOUT_MS = 60 * 60 * 1000;   // 60 minutes
 const WARNING_BEFORE_MS     = 5  * 60 * 1000;    // warn 5 min before timeout
 const LAST_ACTIVE_KEY       = 'lastActiveAt';
 
+function buildPhoneCandidates(input: string): string[] {
+  const raw = String(input || '').trim();
+  const digits = raw.replace(/\D/g, '');
+  const out: string[] = [];
+  const pushUnique = (v: string) => {
+    const value = String(v || '').trim();
+    if (!value) return;
+    if (!out.includes(value)) out.push(value);
+  };
+
+  // Prefer what the user entered first (digits-only form).
+  pushUnique(digits);
+
+  // Kenya local format: 07XXXXXXXX -> 2547XXXXXXXX
+  if (/^0\d{9}$/.test(digits)) {
+    pushUnique(`254${digits.slice(1)}`);
+  }
+
+  // Kenya intl format: 2547XXXXXXXX -> 07XXXXXXXX
+  if (/^254\d{9}$/.test(digits)) {
+    pushUnique(`0${digits.slice(3)}`);
+  }
+
+  // Some backends accept +2547XXXXXXXX explicitly.
+  for (const c of [...out]) {
+    if (/^\d+$/.test(c) && !c.startsWith('+')) {
+      pushUnique(`+${c}`);
+    }
+  }
+
+  return out;
+}
+
 // Define types based on the backend AuthResponse model
 interface User {
   userId: number;
@@ -65,6 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const doLogout = useCallback((reason?: string) => {
     localStorage.removeItem('user');
     localStorage.removeItem('token');
+    localStorage.removeItem('expiresAtUtc');
     localStorage.removeItem(LAST_ACTIVE_KEY);
     syncTokenCookie(null);
     setUser(null);
@@ -138,6 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (last > 0 && Date.now() - last > INACTIVITY_TIMEOUT_MS) {
           localStorage.removeItem('user');
           localStorage.removeItem('token');
+          localStorage.removeItem('expiresAtUtc');
           localStorage.removeItem(LAST_ACTIVE_KEY);
           syncTokenCookie(null);
           setIsLoading(false);
@@ -146,6 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         localStorage.setItem('token', token);
+        localStorage.setItem('expiresAtUtc', userData.expiresAtUtc || '');
         syncTokenCookie(token);
         isAuthed.current = true;
         setUser(userData);
@@ -154,6 +190,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.error('Error loading user data:', error);
         localStorage.removeItem('user');
         localStorage.removeItem('token');
+        localStorage.removeItem('expiresAtUtc');
         localStorage.removeItem(LAST_ACTIVE_KEY);
         syncTokenCookie(null);
       } finally {
@@ -166,26 +203,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (phoneNumber: string, password: string): Promise<void> => {
-    try {
-      const response = await api.post('/api/Auth/login', {
-        phoneNumber,
-        password
-      });
-      
-      const userData: User = response.data;
-      
-      localStorage.setItem('user', JSON.stringify(userData));
-      localStorage.setItem('token', userData.token);
-      syncTokenCookie(userData.token);
-      isAuthed.current = true;
-      setUser(userData);
-      resetInactivityTimer();
-      router.push('/dashboard');
-    } catch (error: unknown) {
-      console.error('Login failed:', error);
-      const errorMessage = (error as { response?: { data?: { error?: string } } }).response?.data?.error || 'Login failed. Please check your credentials.';
-      throw new Error(errorMessage);
+    const normalizedPassword = String(password || '').trim();
+    const phoneCandidates = buildPhoneCandidates(phoneNumber);
+    let lastError: unknown;
+
+    for (let i = 0; i < phoneCandidates.length; i += 1) {
+      const candidate = phoneCandidates[i];
+      try {
+        const response = await api.post('/api/Auth/login', {
+          phoneNumber: candidate,
+          password: normalizedPassword
+        });
+
+        const userData: User = response.data;
+
+        localStorage.setItem('user', JSON.stringify(userData));
+        localStorage.setItem('token', userData.token);
+        localStorage.setItem('expiresAtUtc', userData.expiresAtUtc || '');
+        syncTokenCookie(userData.token);
+        isAuthed.current = true;
+        setUser(userData);
+        resetInactivityTimer();
+        router.push('/dashboard');
+        return;
+      } catch (error: unknown) {
+        lastError = error;
+        const rec = (error as Record<string, unknown>) || {};
+        const statusCode = typeof rec.statusCode === 'number' ? rec.statusCode : undefined;
+        const message = String((rec.errorMessage as string) || (error instanceof Error ? error.message : '') || '').toLowerCase();
+        const looksLikeInvalidCredentials = statusCode === 401 || message.includes('invalid credential');
+
+        // Retry only when credentials are rejected and we still have another phone format to try.
+        if (looksLikeInvalidCredentials && i < phoneCandidates.length - 1) continue;
+        break;
+      }
     }
+
+    console.error('Login failed:', lastError);
+    const fallbackMessage =
+      lastError instanceof Error && lastError.message
+        ? lastError.message
+        : 'Login failed. Please check your credentials.';
+    throw new Error(fallbackMessage);
   };
 
   const logout = () => doLogout();

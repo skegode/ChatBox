@@ -8,8 +8,8 @@ export default function HeroSection() {
       <nav className="navbar navbar-expand-lg fixed-top navbar-custom sticky sticky-dark landing-navbar" id="navbar">
         <div className="container">
           <a className="navbar-brand logo">
-            <img src="images/logo.png" alt="" className="logo-dark" height={60} />
-            {/* <img src="images/logo.png" alt="" className="logo-light" height={24} /> */}
+            <img src="/images/logo.png" alt="" className="logo-dark" height={60} />
+            {/* <img src="/images/logo.png" alt="" className="logo-light" height={24} /> */}
           </a>
           <button className="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation">
             <i className="mdi mdi-menu" />
@@ -37,7 +37,7 @@ export default function HeroSection() {
           </div>
         </div>
       </nav>
-      <section className="hero-1-bg landing-hero" style={{backgroundImage: 'url(images/hero-1-bg-img.png)'}} id="home">
+      <section className="hero-1-bg landing-hero" style={{backgroundImage: 'url(/images/hero-1-bg-img.png)'}} id="home">
         <div className="container">
           <div className="row align-items-center justify-content-center">
             <div className="col-lg-6">
@@ -52,7 +52,7 @@ export default function HeroSection() {
             </div>
             <div className="col-lg-6 col-md-10">
               <div className=" mt-5 mt-lg-0">
-                <img src="images/hero-1-img.png" alt="" className="img-fluid d-block mx-auto" />
+                <img src="/images/hero-1-img.png" alt="" className="img-fluid d-block mx-auto" />
               </div>
             </div>
           </div>

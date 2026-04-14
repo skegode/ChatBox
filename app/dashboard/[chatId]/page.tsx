@@ -309,6 +309,14 @@ function getSendFailureReason(payload: unknown): string | null {
   return null;
 }
 
+function isTemplateAutoSentWindowClosedReason(reason: string | null | undefined): boolean {
+  if (!reason) return false;
+  const text = reason.toLowerCase();
+  const hasWindowClosed = /24\s*-?\s*hour/.test(text) && text.includes("window") && text.includes("closed");
+  const hasTemplateAutoSent = text.includes("template") && (text.includes("sent automatically") || text.includes("auto"));
+  return hasWindowClosed && hasTemplateAutoSent;
+}
+
 function isUnsupportedSenderObjectError(payload: unknown): boolean {
   if (!payload || typeof payload !== "object") return false;
   const details = (payload as Record<string, unknown>)["details"];
@@ -972,8 +980,15 @@ export default function ChatPage() {
           setLastSendRoutingMeta(sendRoutingMeta);
         }
         const sendFailureReason = getSendFailureReason(responseData);
-        if (sendFailureReason) {
+        if (sendFailureReason && !isTemplateAutoSentWindowClosedReason(sendFailureReason)) {
           throw new Error(sendFailureReason);
+        }
+
+        if (isTemplateAutoSentWindowClosedReason(sendFailureReason)) {
+          // Backend already initiated re-engagement with a template; treat this as
+          // successful conversation initiation rather than a hard send failure.
+          console.info("24-hour window closed; template auto-sent to initiate conversation.");
+          setError(null);
         }
 
         const normalizedResponse = responseData
@@ -1022,6 +1037,11 @@ export default function ChatPage() {
       if (axios.isAxiosError(error)) {
         const response = error.response;
         const parsedReason = getSendFailureReason(response?.data);
+        if (isTemplateAutoSentWindowClosedReason(parsedReason)) {
+          setError(null);
+          await fetchConversation(false);
+          return true;
+        }
         if (response?.status === 403) {
           setError("You don't have permission to send message to this contact");
         } else if (parsedReason) {

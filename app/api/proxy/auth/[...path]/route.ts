@@ -1,14 +1,27 @@
 import { NextResponse } from 'next/server';
+import { randomUUID } from 'crypto';
 
 const DEFAULT_BACKEND = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5265';
 
-async function fetchUpstream(url: string, init: RequestInit) {
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isTransientStatus(status: number) {
+  return status === 502 || status === 503 || status === 504;
+}
+
+async function fetchUpstream(url: string, init: RequestInit, timeoutMs = 12000) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(url, init);
+    const res = await fetch(url, { ...init, signal: controller.signal });
     const body = await res.text();
     return { status: res.status, body, contentType: res.headers.get('content-type') || 'application/json' };
   } catch (err) {
     return { status: 502, body: JSON.stringify({ error: 'Upstream fetch failed' }), contentType: 'application/json' };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -21,6 +34,7 @@ function buildUpstreamUrl(pathSegments: string[] | undefined) {
 async function handle(req: Request, ctx: any) {
   const segments = ctx?.params?.path || [];
   const upstream = buildUpstreamUrl(Array.isArray(segments) ? segments : [segments]);
+  const requestId = req.headers.get('x-request-id') || randomUUID();
 
   // clone headers, preserving auth cookies/authorization if present
   const headers: Record<string, string> = {};
@@ -30,6 +44,7 @@ async function handle(req: Request, ctx: any) {
     if (k.toLowerCase() === 'host') continue;
     headers[k] = v;
   }
+  headers['x-request-id'] = requestId;
 
   const method = req.method.toUpperCase();
 
@@ -49,13 +64,31 @@ async function handle(req: Request, ctx: any) {
     credentials: 'include',
   };
 
-  const res = await fetchUpstream(upstream, init);
+  const isLogin = method === 'POST' && /\/api\/Auth\/login$/i.test(upstream);
+  const isForgotPassword = method === 'POST' && /\/api\/Auth\/forgot-password$/i.test(upstream);
+  let res = await fetchUpstream(upstream, init);
+
+  if (isLogin && isTransientStatus(res.status)) {
+    await sleep(350);
+    res = await fetchUpstream(upstream, init, 15000);
+  }
+
+  if (isForgotPassword) {
+    console.info('[auth-proxy] forgot-password upstream response', {
+      requestId,
+      status: res.status,
+      upstream,
+    });
+  }
 
   try {
     const parsed = JSON.parse(res.body);
-    return NextResponse.json(parsed, { status: res.status });
+    return NextResponse.json(parsed, { status: res.status, headers: { 'x-request-id': requestId } });
   } catch (e) {
-    return new NextResponse(res.body, { status: res.status, headers: { 'Content-Type': res.contentType } });
+    return new NextResponse(res.body, {
+      status: res.status,
+      headers: { 'Content-Type': res.contentType, 'x-request-id': requestId },
+    });
   }
 }
 

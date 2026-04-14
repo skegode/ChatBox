@@ -9,6 +9,7 @@ Vercel deployment notes
 3) Required environment variables
 - `NEXT_PUBLIC_API_URL` (recommended): public URL your frontend should call (e.g. https://api.example.com or same as BACKEND_URL).
 - `BACKEND_URL` (server-side): base URL for server-side proxy routes. Example: `https://app.servicesuitecloud.com/WhatsappApi`.
+- `NEXT_PUBLIC_APP_URL` (recommended): the canonical frontend URL (example: `https://chat.servicesuitecloud.com`). Used when requesting password reset links.
 - Optionally set `NEXT_PUBLIC_LOCAL_API` for local dev override.
 
 4) Notes
@@ -29,12 +30,17 @@ Vercel deployment notes
 Recommended environment variables (set these in Vercel Project → Settings → Environment Variables)
 - `NEXT_PUBLIC_API_URL` (string): Public URL the frontend should use to call your API in production (example: `https://api.mychatbox.example`). Used client-side.
 - `BACKEND_URL` (string): Backend base URL used by server-side routes and the image proxy (example: `https://api.mychatbox.example`).
+- `NEXT_PUBLIC_APP_URL` (string): Canonical frontend URL used for reset-link callbacks (example: `https://chat.servicesuitecloud.com`).
 - `NEXT_PUBLIC_LOCAL_API` (optional, string): Local backend used during development (example: `http://localhost:5265`).
 - `JWT_SECRET`, `OTHER_API_KEY` (as required): any server-side secrets required by your backend. Mark as "Secret" in Vercel.
 
+Password reset links
+- Ensure backend email templates generate reset links to your frontend host (for this deployment: `https://chat.servicesuitecloud.com/password-reset?...`).
+- If your backend accepts callback fields on forgot-password, this frontend now sends `ResetUrl`, `ResetLinkBase`, and `FrontendBaseUrl`.
+
 Deploy checklist
 1. Confirm repository is connected to Vercel and the correct branch is selected.
-2. In Vercel → Project → Settings → Environment Variables, add `NEXT_PUBLIC_API_URL` and `BACKEND_URL` for Preview and Production as appropriate.
+2. In Vercel → Project → Settings → Environment Variables, add `NEXT_PUBLIC_API_URL`, `BACKEND_URL`, and `NEXT_PUBLIC_APP_URL` for Preview and Production as appropriate.
 3. Trigger a new deploy (push to branch or click "Redeploy").
 4. Review build logs; if `next build` fails, copy-paste the error output here and I'll diagnose.
 

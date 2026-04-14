@@ -101,6 +101,8 @@ function ChatItemInner({ chat }: { chat: Conversation }) {
     avatarSrc = chat.avatarUrl;
   }
 
+  const receivedOn = chat?.lastDisplayPhoneNumber || chat?.lastSourcePhoneNumberId || null;
+
   return (
     <div className="d-flex">
       <div className="chat-user-img away align-self-center me-3 ms-0">
@@ -144,10 +146,10 @@ function ChatItemInner({ chat }: { chat: Conversation }) {
             <span className="text-truncate">{truncateText(chat?.lastMessageText ?? 'No messages yet', 25)}</span>
           )}
         </p>
-        {chat?.lastDisplayPhoneNumber && (
+        {receivedOn && (
           <p className="mb-0 mt-1">
             <span className="badge bg-light text-muted" style={{ fontSize: 10, fontWeight: 500 }}>
-              received on {chat.lastDisplayPhoneNumber}
+              received on {receivedOn}
             </span>
           </p>
         )}

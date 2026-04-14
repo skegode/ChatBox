@@ -35,10 +35,25 @@ export default function ForgotPasswordPage() {
 
     setLoading(true);
     try {
-      await api.post('/api/Auth/forgot-password', { PhoneNumber: phoneNorm });
+      const configuredAppUrl = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/+$/, '');
+      const appOrigin = configuredAppUrl || window.location.origin;
+      const resetUrl = `${appOrigin}/password-reset`;
 
-      // API intentionally returns ambiguous message so attackers can't enumerate users.
-      setInfo('A password reset link has been sent to your registered email.');
+      const response = await api.post('/api/Auth/forgot-password', {
+        PhoneNumber: phoneNorm,
+        // Include common callback keys so backend can generate reset links for the correct frontend host.
+        ResetUrl: resetUrl,
+        ResetLinkBase: resetUrl,
+        FrontendBaseUrl: appOrigin,
+      });
+
+      const reqId = (response?.headers as Record<string, string> | undefined)?.['x-request-id'];
+      if (reqId) {
+        console.info('Forgot-password request id:', reqId);
+      }
+
+      // Keep message intentionally ambiguous so account existence is not leaked.
+      setInfo('If this phone is linked to an account, a password reset link will be sent to its registered email.');
       setPhone('');
     } catch (err: unknown) {
       const msg = getErrorMessage(err);

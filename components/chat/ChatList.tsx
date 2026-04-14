@@ -7,7 +7,7 @@ import { PlusCircle, RefreshCw } from "lucide-react";
 import ChatItem from "./ChatItem";
 // import { FixedSizeList as VirtualList } from 'react-window';
 import { useRouter, usePathname } from "next/navigation";
-import api from "@/lib/api";
+import api, { ProxyTimeoutError } from "@/lib/api";
 import chatAdapter from '@/lib/chatAdapter';
 import { useAuth } from "../providers/AuthProvider";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -41,6 +41,9 @@ export default function ChatList() {
   // Guard background preview calls to avoid request storms that freeze the UI.
   const previewInFlightRef = useRef<Set<string>>(new Set());
   const previewRetryAtRef = useRef<Record<string, number>>({});
+  // Track polling errors and backoff to prevent spamming backend on failures
+  const lastConversationErrorRef = useRef<{status?: number; time: number} | null>(null);
+  const pollingBackoffMultiplierRef = useRef(1);
   const router = useRouter();
   const pathname = usePathname();
   // Keep a ref so the stale useCallback closure always reads the current pathname.
@@ -53,13 +56,19 @@ export default function ChatList() {
   const canViewAllChats = checkPolicy(PERMISSIONS.POLICY_VIEW_ALL_CHATS);
 
   // Fetch conversations from the backend
-  const fetchConversations = useCallback(async (showLoading = true) => {
+  const fetchConversations = useCallback(async (showLoading = true): Promise<boolean> => {
     if (showLoading) setLoading(true);
     else setIsRefreshing(true);
     setError(null);
+    let fetchSucceeded = false;
 
     try {
       const response = await api.get("/api/Chats");
+      fetchSucceeded = true;
+      // On success, reset backoff for next polling cycle
+      lastConversationErrorRef.current = null;
+      pollingBackoffMultiplierRef.current = 1;
+      
       // Map backend fields to Conversation type (be permissive with field names)
       const normalized = Array.isArray(response.data) || response.data ? chatAdapter.normalizeConversations(response.data) : [];
 
@@ -92,6 +101,7 @@ export default function ChatList() {
       });
 
       // For chats that don't include a last message preview, fetch lightweight previews in background
+      // But only if the main fetch succeeded to avoid compounding load on a struggling backend
       (async () => {
           try {
           // Run background preview fetches on the client regardless of a local token
@@ -100,14 +110,17 @@ export default function ChatList() {
           // cookie-based or managed server-side).
           if (typeof window === 'undefined') return; // server-side safety
           const missingAll = (normalized as Conversation[])
-            .filter(c => (!(c.lastMessageText) || !c.lastMessageStatus || !c.lastDisplayPhoneNumber) && c.contactId)
+            .filter(c => (
+              (!c.lastMessageText) ||
+              (!(c.lastDisplayPhoneNumber) && !(c.lastSourcePhoneNumberId))
+            ) && c.contactId)
             .map(c => c.contactId);
           if (missingAll.length === 0) return;
 
           const now = Date.now();
           const retryDelayMs = 90_000;
           // Process all missing rows in controlled batches so the entire list gets enriched.
-          const maxFetchPreviews = missingAll.length;
+          const maxFetchPreviews = Math.min(missingAll.length, 8);
           const toFetch = missingAll
             .filter((contactId) => {
               const key = normalizeContactId(contactId) || contactId;
@@ -118,7 +131,9 @@ export default function ChatList() {
             .slice(0, maxFetchPreviews);
           if (toFetch.length === 0) return;
 
-          const batchSize = 5;
+          // Keep concurrent preview requests low — too many slow requests in
+          // parallel can exhaust the dev server memory and cause it to crash.
+          const batchSize = 2;
           type PreviewEntry = {
             lastMessageText?: string | null;
             lastMessageTime?: string | Date | null;
@@ -142,32 +157,47 @@ export default function ChatList() {
             });
 
             const results = await Promise.allSettled(batchIds.map(async (contactId) => {
-              const tryFetch = async (idToUse: string) => {
+              // Prefer contact endpoint for richer metadata (display/source phone) and
+              // lower latency in most environments. Fallback to query endpoint if needed.
+              let data: unknown = null;
+              for (let attempt = 0; attempt < 2; attempt++) {
                 try {
-                  const r = await api.get(`/api/Messages/contact/${encodeURIComponent(idToUse)}`);
-                  const d = r.data;
-                  // Some backends return an empty array or null for contacts with no messages
-                  if (!d || (Array.isArray(d) && d.length === 0)) return null;
-                  return d;
-                } catch (_) {
-                  return null;
-                }
-              };
-
-              // Try primary endpoint with raw ID, then with +, then query-param alternative
-              let data = await tryFetch(contactId);
-              if (!data) {
-                const withPlus = contactId.startsWith('+') ? contactId : `+${contactId}`;
-                data = await tryFetch(withPlus);
-              }
-              if (!data) {
-                // Fallback: query-param endpoint per backend contract
-                try {
-                  const r = await api.get(`/api/Messages?contactId=${encodeURIComponent(contactId)}`);
+                  const r = await api.get(`/api/Messages/contact/${encodeURIComponent(contactId)}`);
                   const d = r.data;
                   if (d && (!Array.isArray(d) || d.length > 0)) data = d;
-                } catch (_) { /* ignore */ }
+                  break;
+                } catch (fetchErr) {
+                  const isRetryable =
+                    fetchErr instanceof ProxyTimeoutError ||
+                    (fetchErr instanceof Error &&
+                      (fetchErr.name === 'AbortError' ||
+                       (fetchErr as NodeJS.ErrnoException).code === 'ECONNABORTED'));
+                  if (isRetryable && attempt === 0) {
+                    // Brief pause before the single retry
+                    await new Promise<void>((r) => setTimeout(r, 600));
+                    continue;
+                  }
+                  data = null;
+                  break;
+                }
               }
+
+              const maybeMsgs = chatAdapter.normalizeMessages(data, contactId);
+              const hasInboundMeta = Array.isArray(maybeMsgs) && maybeMsgs.some(
+                (m) => Boolean((m as any).isIncoming) &&
+                  (Boolean((m as any).displayPhoneNumber) || Boolean((m as any).sourcePhoneNumberId))
+              );
+              if (!data || !hasInboundMeta) {
+                try {
+                  const r2 = await api.get(`/api/Messages?contactId=${encodeURIComponent(contactId)}`);
+                  if (r2.data && (!Array.isArray(r2.data) || r2.data.length > 0)) {
+                    data = r2.data;
+                  }
+                } catch (_) {
+                  // Keep best-effort behavior without failing the batch.
+                }
+              }
+
               const msgs = chatAdapter.normalizeMessages(data, contactId);
               return { contactId, msgs };
             }));
@@ -180,7 +210,8 @@ export default function ChatList() {
                   msgs.sort((a, b) => new Date((b as any).messageDateTime).getTime() - new Date((a as any).messageDateTime).getTime());
                   const last = msgs[0];
                   const latestIncomingWithDisplay = msgs.find(
-                    (m) => Boolean((m as any).isIncoming) && Boolean((m as any).displayPhoneNumber)
+                    (m) => Boolean((m as any).isIncoming) &&
+                      (Boolean((m as any).displayPhoneNumber) || Boolean((m as any).sourcePhoneNumberId))
                   );
                   let previewText = last.messageText ?? null;
                   if (!previewText && (last.mediaPath || last.messageType)) {
@@ -194,35 +225,18 @@ export default function ChatList() {
                     lastMediaPath: last.mediaPath ?? null,
                     lastMessageType: last.messageType ?? null,
                     lastMessageDirection: last.isIncoming ? 'incoming' : 'outgoing',
-                    lastMessageStatus: null,
+                    // Keep chat list status lightweight; full status checks happen in conversation view.
+                    lastMessageStatus: last.isIncoming ? null : 'sent',
                     // Keep "received on" bound to the latest inbound message metadata,
                     // even if the latest message in thread is outbound.
-                    lastDisplayPhoneNumber: (latestIncomingWithDisplay as any)?.displayPhoneNumber ?? null,
+                    lastDisplayPhoneNumber:
+                      (latestIncomingWithDisplay as any)?.displayPhoneNumber ??
+                      (latestIncomingWithDisplay as any)?.sourcePhoneNumberId ??
+                      null,
                     lastSourcePhoneNumberId: (latestIncomingWithDisplay as any)?.sourcePhoneNumberId ?? null,
                   };
                   previewsCache[contactId] = entry;
                   previewsCache[normalizeContactId(contactId)] = entry;
-
-                  // Match conversation view status source by checking message status endpoint
-                  // for the latest message in the thread.
-                  const messageId = typeof last.messageId === 'string' ? last.messageId : null;
-                  if (messageId && !messageId.startsWith('temp-')) {
-                    try {
-                      const statusResp = await api.get('/api/Messages/status', { params: { messageId } });
-                      const payload = statusResp?.data as { status?: string; delivered?: boolean } | null;
-                      const normalized = String(payload?.status ?? '').toLowerCase();
-                      if (normalized === 'read' || normalized === 'seen' || normalized === 'received') {
-                        entry.lastMessageStatus = 'read';
-                      } else if (normalized === 'delivered' || payload?.delivered === true) {
-                        entry.lastMessageStatus = 'delivered';
-                      } else {
-                        entry.lastMessageStatus = 'sent';
-                      }
-                    } catch (_) {
-                      // Fallback keeps ticks deterministic when status endpoint fails.
-                      entry.lastMessageStatus = 'sent';
-                    }
-                  }
 
                   // Success: stop retrying this contact.
                   previewRetryAtRef.current[key] = Number.MAX_SAFE_INTEGER;
@@ -266,15 +280,39 @@ export default function ChatList() {
                 } as Conversation;
               }));
             }
+
+            // Pause between batches to avoid overwhelming the server with
+            // many concurrent long-running requests.
+            if (i + batchSize < toFetch.length) {
+              await new Promise<void>((res) => setTimeout(res, 450));
+            }
           }
         } catch (err) {
           console.error('Background preview fetch failed', err);
         }
       })();
+      
+      return fetchSucceeded;
     } catch (err: unknown) {
       console.error("Error fetching conversations:", err);
+      // Track the error to apply backoff on next poll
+      const statusCode = (err as any)?.statusCode;
+      lastConversationErrorRef.current = { status: statusCode, time: Date.now() };
+      // Apply exponential backoff on transient errors (502, 503)
+      if (statusCode === 502 || statusCode === 503) {
+        pollingBackoffMultiplierRef.current = Math.min(pollingBackoffMultiplierRef.current * 2, 8);
+      }
+      fetchSucceeded = false;
       if (showLoading) setChats([]);
-      setError("Failed to load chats.");
+      const isTimeout =
+        err instanceof ProxyTimeoutError ||
+        (err instanceof Error &&
+          (err.message.toLowerCase().includes('timeout') ||
+           err.message.toLowerCase().includes('timed out')));
+      setError(isTimeout
+        ? 'The request timed out loading chats. Will retry automatically.'
+        : 'Failed to load chats.');
+      return fetchSucceeded;
     } finally {
       if (showLoading) setLoading(false);
       else setIsRefreshing(false);
@@ -293,11 +331,17 @@ export default function ChatList() {
 
     const startPolling = () => {
       if (interval) return;
+      // Calculate dynamic polling interval based on recent errors
+      const getPollingInterval = () => {
+        const baseInterval = 25000; // 25 seconds
+        return baseInterval * pollingBackoffMultiplierRef.current;
+      };
+      
       interval = setInterval(() => {
         if (document.visibilityState === 'visible') {
           silentRefresh();
         }
-      }, 15000);
+      }, getPollingInterval());
     };
 
     const stopPolling = () => {
@@ -309,7 +353,8 @@ export default function ChatList() {
         stopPolling();
       } else if (document.visibilityState === 'visible' && running) {
         silentRefresh();
-        startPolling();
+        stopPolling(); // Clear old interval
+        startPolling(); // Restart with fresh timing
       }
     };
 

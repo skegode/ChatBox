@@ -60,6 +60,15 @@ export class ApiError extends Error {
   }
 }
 
+// Thrown when the proxy returns a 502 "Proxy timeout" sentinel rather than a generic 502.
+export class ProxyTimeoutError extends ApiError {
+  constructor(message = 'Request timed out') {
+    super(message, { statusCode: 502 });
+    this.name = 'ProxyTimeoutError';
+    Object.setPrototypeOf(this, ProxyTimeoutError.prototype);
+  }
+}
+
 // Type guard for client code
 export function isApiError(err: unknown): err is ApiError {
   if (err instanceof ApiError) return true;
@@ -134,6 +143,8 @@ function parseNestedErrorDetails(data: unknown): string | undefined {
 
 // Add request interceptor for auth and debugging
 api.interceptors.request.use((config) => {
+  const rawUrl = typeof config.url === 'string' ? config.url : '';
+  const isLoginRequest = /\/api\/(?:proxy\/)?Auth\/login$/i.test(rawUrl);
   // Attach JWT token if available
   let token: string | null = null;
   if (typeof localStorage !== "undefined") token = localStorage.getItem("token");
@@ -144,7 +155,7 @@ api.interceptors.request.use((config) => {
     const m = document.cookie.match(new RegExp('(^|; )' + 'token' + '=([^;]+)'));
     if (m) token = decodeURIComponent(m[2]);
   }
-  if (token) {
+  if (token && !isLoginRequest) {
     config.headers = config.headers || {};
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore - axios header typing can be strict here
@@ -168,7 +179,12 @@ api.interceptors.request.use((config) => {
 // Add response interceptor with improved error handling
 api.interceptors.response.use(
   (response) => {
-    console.log(`📥 API Response: ${response.status} from ${response.config.url}`);
+    const reqId = response.headers['x-request-id'];
+    console.log(
+      `📥 API Response: ${response.status} from ${response.config.url}${
+        reqId ? ` [x-request-id: ${reqId}]` : ''
+      }`
+    );
     return response;
   },
   (error: unknown) => {
@@ -180,40 +196,28 @@ api.interceptors.response.use(
       const config = ae.config;
       const method = (config?.method || "UNKNOWN").toString().toUpperCase();
       const url = config?.url;
-      // Attempt silent token refresh on 401 once, then retry original request
-      try {
-        const originalConfig = config as any;
-        if (status === 401 && originalConfig && !originalConfig._retry) {
-          originalConfig._retry = true;
-          // call refresh endpoint through proxy; must set credentials if backend uses cookies
-          return fetch('/api/Auth/refresh', { method: 'POST', credentials: 'include' })
-            .then(async (res) => {
-              if (!res.ok) throw new Error('Refresh failed');
-              let body: any = {};
-              try { body = await res.json(); } catch (e) { body = {}; }
-              const newToken = getStringProp(body, 'token') || getStringProp(body, 'accessToken') || (body && (body as any).token);
-              if (newToken && typeof window !== 'undefined') {
-                try { localStorage.setItem('token', String(newToken)); } catch (e) { /* ignore */ }
-                // update axios instance default header so subsequent requests include token
-                (api.defaults.headers as any) = (api.defaults.headers as any) || {};
-                (api.defaults.headers as any)['Authorization'] = `Bearer ${newToken}`;
-                // ensure the original request includes new header
-                originalConfig.headers = originalConfig.headers || {};
-                originalConfig.headers['Authorization'] = `Bearer ${newToken}`;
-              }
-              return api.request(originalConfig);
-            })
-            .catch((e) => {
-              // Refresh failed: clear client-side auth and redirect to login
-              try { if (typeof localStorage !== 'undefined') { localStorage.removeItem('token'); localStorage.removeItem('user'); } } catch (e) {}
-              if (typeof window !== 'undefined') window.location.href = '/login';
-              const apiErr = new ApiError('Unauthorized', { statusCode: 401, responseData: data, config });
-              return Promise.reject(apiErr);
-            });
+      const isLoginRequest = typeof url === 'string' && /\/api\/(?:proxy\/)?Auth\/login$/i.test(url);
+
+      // Backend contract: any 401 after login means JWT is expired/invalid.
+      if (status === 401 && !isLoginRequest) {
+        try {
+          if (typeof localStorage !== 'undefined') {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            localStorage.removeItem('lastActiveAt');
+          }
+          if (typeof sessionStorage !== 'undefined') {
+            sessionStorage.removeItem('token');
+          }
+          if (typeof document !== 'undefined') {
+            document.cookie = 'token=; Path=/; Max-Age=0; SameSite=Lax';
+          }
+        } catch (cleanupError) {
+          console.warn('Failed to clear auth state after 401:', cleanupError);
         }
-      } catch (ex) {
-        // ignore refresh attempt failures and continue to normal error handling below
-        console.error('Token refresh attempt failed:', ex);
+        if (typeof window !== 'undefined') {
+          window.location.href = '/login';
+        }
       }
         // For 404s and expected client errors, avoid noisy full-body dumps.
         if (status) {
@@ -279,6 +283,13 @@ api.interceptors.response.use(
         messageText ||
         ae.message ||
         'Unknown API error';
+
+      // Proxy surfaces timeout as 502 { error: "Proxy timeout" }.  Use a typed error
+      // so callers can distinguish timeouts from other gateway failures.
+      if (status === 502 && errorText === 'Proxy timeout') {
+        const details = getStringProp(data, 'details') || 'Request timed out';
+        return Promise.reject(new ProxyTimeoutError(String(details)));
+      }
 
       const apiErr = new ApiError(String(derivedMessage), {
         statusCode: status,

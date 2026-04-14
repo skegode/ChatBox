@@ -6,7 +6,7 @@ export default function FeaturesSection() {
         <div className="row justify-content-center">
           <div className="col-lg-4 align-self-center">
             <div className="mb-4 mb-lg-0">
-              <img src="images/features.svg" alt="" className="img-fluid d-block mx-auto" />
+              <img src="/images/features.svg" alt="" className="img-fluid d-block mx-auto" />
               <h3>Why Choose Customer Desk?</h3>
               <p className="text-muted mb-4">Discover powerful tools that transform WhatsApp into your company’s customer support hub.</p>
             </div>
